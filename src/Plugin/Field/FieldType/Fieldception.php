@@ -45,9 +45,6 @@ class Fieldception extends FieldItemBase {
       );
     }
 
-    if ($this->subfieldSettings && isset($settings['storage'][$this->subfieldSettings])) {
-      $settings = $settings['storage'][$this->subfieldSettings]['settings'];
-    }
     return $settings;
   }
 
@@ -119,10 +116,8 @@ class Fieldception extends FieldItemBase {
       '#prefix' => '<div id="fieldception-fields">',
       '#suffix' => '</div>',
       '#tree' => TRUE,
-      '#element_validate' => [[get_class($this), 'validateFields']],
+      '#element_validate' => [[get_class($this), 'validateStorage']],
     ];
-
-    ksm($settings);
 
     $count = 1;
     $user_input = $form_state->getUserInput();
@@ -196,7 +191,7 @@ class Fieldception extends FieldItemBase {
    *
    * Disallows saving inaccessible or untrusted URLs.
    */
-  public static function validateFields($element, FormStateInterface $form_state, $form) {
+  public static function validateStorage($element, FormStateInterface $form_state, $form) {
     $fields = $form_state->getValue(['settings', '_storage']);
     foreach ($fields as $subfield => $config) {
       $fields[$subfield] += [
@@ -285,6 +280,7 @@ class Fieldception extends FieldItemBase {
       '#prefix' => '<div id="fieldception-fields">',
       '#suffix' => '</div>',
       '#tree' => TRUE,
+      '#element_validate' => [[get_class($this), 'validateFields']],
     ];
 
     foreach ($settings['storage'] as $subfield => $config) {
@@ -311,6 +307,19 @@ class Fieldception extends FieldItemBase {
     }
 
     return $element;
+  }
+
+  /**
+   * Make sure each field has a settings array value.
+   */
+  public static function validateFields($element, FormStateInterface $form_state, $form) {
+    $fields = $form_state->getValue(['settings', 'fields']);
+    foreach ($fields as $subfield => $config) {
+      $fields[$subfield] += [
+        'settings' => [],
+      ];
+    }
+    $form_state->setValue(['settings', 'fields'], $fields);
   }
 
   /**

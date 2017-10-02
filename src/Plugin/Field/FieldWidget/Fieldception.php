@@ -125,9 +125,8 @@ class Fieldception extends WidgetBase {
     }
 
     foreach ($field_settings['storage'] as $subfield => $config) {
-      $subfield_field_settings = isset($field_settings['fields'][$subfield]['settings']) ? $field_settings['fields'][$subfield]['settings'] : [];
       $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield, $subfield_field_settings);
+      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_settings);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
 
@@ -157,8 +156,7 @@ class Fieldception extends WidgetBase {
     $new_values = [];
     foreach ($values as $delta => $value) {
       foreach ($field_settings['storage'] as $subfield => $config) {
-        $subfield_field_settings = isset($field_settings['fields'][$subfield]['settings']) ? $field_settings['fields'][$subfield]['settings'] : [];
-        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield, $subfield_field_settings);
+        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition);
 
         $subvalues = $subfield_widget->massageFormValues([$value[$subfield]['value']], $form, $form_state);
@@ -175,6 +173,21 @@ class Fieldception extends WidgetBase {
       }
     }
     return $new_values;
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * Merge field settings into storage settings to simplify configuration.
+   */
+  protected function getFieldSettings() {
+    $settings = $this->fieldDefinition->getSettings();
+    foreach ($settings['storage'] as $subfield => $config) {
+      if (isset($settings['fields'][$subfield]['settings'])) {
+        $settings['storage'][$subfield]['settings'] += $settings['fields'][$subfield]['settings'];
+      }
+    }
+    return $settings;
   }
 
 }

@@ -123,6 +123,8 @@ class FieldceptionHelper {
   /**
    * Get subfield definition.
    *
+   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
+   *   The field definition.
    * @param array $config
    *   An array of configuration options with the following keys:
    *   - type: The field type id.
@@ -130,20 +132,15 @@ class FieldceptionHelper {
    *   - settings: An array of storage settings.
    * @param string $subfield
    *   The subfield name.
-   * @param string $field_name
-   *   The parent entity field name.
-   * @param array $settings
-   *   A settings array.
    *
    * @return Drupal\Core\Field\FieldDefinitionInterface
    *   A subfield definition.
    */
-  public function getSubfieldDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield, array $settings = []) {
+  public function getSubfieldDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
     $key = $this->toKey([
       $definition,
       $config,
       $subfield,
-      $settings,
     ]);
     if (!isset($this->subfieldDefinitions[$key])) {
       $type = $config['type'];
@@ -166,8 +163,10 @@ class FieldceptionHelper {
       }
       $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldStorageDefinition($type, $definition)
         ->setKey($key)
+        // Subfields only support single values.
+        ->setCardinality(1)
         ->setSubfield($subfield)
-        ->setSettings($settings);
+        ->setSettings($config['settings']);
     }
     return $this->subfieldDefinitions[$key];
   }

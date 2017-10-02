@@ -90,7 +90,7 @@ class Fieldception extends FieldItemBase {
 
     // Gather valid field types.
     $field_type_options = [];
-    foreach ($fieldception_helper->getfieldTypePluginManager()->getGroupedDefinitions($fieldception_helper->getfieldTypePluginManager()->getUiDefinitions()) as $category => $field_types) {
+    foreach ($fieldception_helper->getFieldTypePluginManager()->getGroupedDefinitions($fieldception_helper->getFieldTypePluginManager()->getUiDefinitions()) as $category => $field_types) {
       foreach ($field_types as $name => $field_type) {
         $field_type_options[$category][$name] = $field_type['label'];
       }
@@ -257,7 +257,7 @@ class Fieldception extends FieldItemBase {
         // @see \Drupal\field_ui\Form\FieldStorageAddForm::submitForm
         list(, $type, $option_key) = explode(':', $type, 3);
       }
-      $field_storage_definition = $fieldception_helper->getfieldTypePluginManager()->getDefinition($type);
+      $field_storage_definition = $fieldception_helper->getFieldTypePluginManager()->getDefinition($type);
       $dependencies['module'][] = $field_storage_definition['provider'];
     }
     return $dependencies;
@@ -345,8 +345,23 @@ class Fieldception extends FieldItemBase {
           continue;
         }
         foreach ($subconstraint->properties as $column => $types) {
+          $subfield_column = $subfield . '_' . $column;
           foreach ($types as $type_name => $type_constraint) {
-            $subfield_constraints[$subfield . '_' . $column][$type_name] = $type_constraint;
+            $subfield_constraints[$subfield_column][$type_name] = $type_constraint;
+          }
+        }
+      }
+      foreach ($subfield_storage::propertyDefinitions($subfield_definition) as $column => $property) {
+        $subfield_column = $subfield . '_' . $column;
+        if (!empty($settings['fields'][$subfield]['required'])) {
+          // NotBlank validator is not suitable for booleans because it does not
+          // recognize '0' as an empty value.
+          if ($subfield_definition->getType() == 'boolean') {
+            $subfield_constraints[$subfield_column]['NotEqualTo']['value'] = 0;
+            $subfield_constraints[$subfield_column]['NotEqualTo']['message'] = t('This value should not be blank.');
+          }
+          else {
+            $subfield_constraints[$subfield_column]['NotBlank'] = [];
           }
         }
       }
@@ -369,12 +384,6 @@ class Fieldception extends FieldItemBase {
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
-
-      // if ($this->values) {
-      //   // Pass in the current delta's values if they are set.
-      //   dsm($this->values);
-      //   $subfield_storage->setValue($fieldception_helper->convertValueToSubfieldValue($subfield_definition, $this->values));
-      // }
 
       if (!$subfield_storage->isEmpty()) {
         return FALSE;

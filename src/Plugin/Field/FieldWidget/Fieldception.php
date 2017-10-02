@@ -6,6 +6,10 @@ use Drupal\Core\Field\WidgetBase;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
+use Drupal\Component\Utility\Html;
+use Drupal\Component\Utility\NestedArray;
+use Symfony\Component\Validator\ConstraintViolationInterface;
+use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 /**
  * Plugin implementation of the 'double_field' widget.
@@ -36,6 +40,7 @@ class Fieldception extends WidgetBase {
     $settings = $this->getSettings();
     $field_settings = $this->getFieldSettings();
     $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $field_name = $this->fieldDefinition->getName();
 
     $element = [];
     $element['inline'] = [
@@ -49,21 +54,55 @@ class Fieldception extends WidgetBase {
     ];
 
     foreach ($field_settings['storage'] as $subfield => $config) {
-      $subfield_field_settings = isset($field_settings['fields'][$subfield]['settings']) ? $field_settings['fields'][$subfield]['settings'] : [];
+      $wrapper_id = Html::getId('fieldception-' . $field_name . '-' . $subfield);
+
       $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield, $subfield_field_settings);
-      $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_settings);
+      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      // Get type. First use submitted value, Then current settings. Then
+      // default formatter if nothing has been set yet.
+      $subfield_widget_type = $form_state->getValue([
+        'fields',
+        $field_name,
+        'settings_edit_form',
+        'settings',
+        'fields',
+        $subfield,
+        'type',
+      ]) ?: $this->getSubfieldWidgetType($subfield_definition);
+      $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type, $subfield_settings);
 
       $element['fields'][$subfield] = [
         '#type' => 'fieldset',
         '#title' => $config['label'],
         '#tree' => TRUE,
+        '#id' => $wrapper_id,
+      ];
+      $element['fields'][$subfield]['type'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Widget'),
+        '#options' => $fieldception_helper->getFieldWidgetPluginManager()->getOptions($config['type']),
+        '#default_value' => $subfield_widget_type,
+        '#required' => TRUE,
+        '#ajax' => [
+          'callback' => [get_class($this), 'settingsFormAjax'],
+          'wrapper' => $wrapper_id,
+        ],
       ];
       $element['fields'][$subfield]['settings'] = [];
       $element['fields'][$subfield]['settings'] = $subfield_widget->settingsForm($element['fields'][$subfield]['settings'], $form_state);
     }
 
     return $element;
+  }
+
+  /**
+   * Ajax callback for the handler settings form.
+   *
+   * @see static::fieldSettingsForm()
+   */
+  public static function settingsFormAjax($form, FormStateInterface $form_state) {
+    $element = $form_state->getTriggeringElement();
+    return NestedArray::getValue($form, array_slice($element['#array_parents'], 0, -1));
   }
 
   /**
@@ -125,18 +164,22 @@ class Fieldception extends WidgetBase {
     }
 
     foreach ($field_settings['storage'] as $subfield => $config) {
+      $subfield_field_settings = isset($field_settings['fields'][$subfield]['settings']) ? $field_settings['fields'][$subfield]['settings'] : [];
       $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
-      $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_settings);
+      $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
+      $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type, $subfield_settings);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
 
       $element[$subfield] = [
         '#type' => 'container',
         '#tree' => TRUE,
+        '#fieldception_required' => !empty($field_settings['fields'][$subfield]['required']),
       ];
       $element[$subfield]['value'] = [
         '#title' => $config['label'],
         '#required' => FALSE,
+        '#field_parents' => $element['#field_parents'],
       ];
 
       $element[$subfield]['value'] = $subfield_widget->formElement($subfield_items, 0, $element[$subfield]['value'], $form, $form_state);
@@ -148,16 +191,29 @@ class Fieldception extends WidgetBase {
   /**
    * {@inheritdoc}
    */
+  public function errorElement(array $element, ConstraintViolationInterface $error, array $form, FormStateInterface $form_state) {
+    $subfield_delta = preg_replace('/\D/', '', $error->arrayPropertyPath[0]);
+    if (isset($element['value_' . $subfield_delta]['value'])) {
+      return $element['value_' . $subfield_delta]['value'];
+    }
+    return [];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $field_settings = $this->getFieldSettings();
     $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $schema = $field_definition->getSchema();
 
     $new_values = [];
     foreach ($values as $delta => $value) {
       foreach ($field_settings['storage'] as $subfield => $config) {
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
-        $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition);
+        $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
+        $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type);
 
         $subvalues = $subfield_widget->massageFormValues([$value[$subfield]['value']], $form, $form_state);
         $subvalues = reset($subvalues);
@@ -166,13 +222,38 @@ class Fieldception extends WidgetBase {
         }
         foreach ($subvalues as $key => $subvalue) {
           $column = str_replace($subfield . '_', '', $key);
-          if (!empty($subvalue)) {
-            $new_values[$delta][$subfield . '_' . $column] = $subvalue;
-          }
+          $new_values[$delta][$subfield . '_' . $column] = $subvalue;
+        }
+      }
+      // Remove empty rows.
+      $row_values = NestedArray::filter($new_values[$delta]);
+      if (empty($row_values)) {
+        unset($new_values[$delta]);
+      }
+    }
+
+    // Make sure each column at least has a blank value.
+    foreach ($new_values as $delta => $values) {
+      foreach ($schema['columns'] as $column_name => $column) {
+        if (!isset($new_values[$delta][$column_name])) {
+          $new_values[$delta][$column_name] = '';
         }
       }
     }
+
     return $new_values;
+  }
+
+  /**
+   * Get subfield widget type.
+   */
+  protected function getSubfieldWidgetType($subfield_definition) {
+    $subfield = $subfield_definition->getSubfield();
+    $settings = $this->getSettings();
+    if (!empty($settings['fields'][$subfield]['type'])) {
+      return $settings['fields'][$subfield]['type'];
+    }
+    return \Drupal::service('fieldception.helper')->getSubfieldDefaultWidget($subfield_definition);
   }
 
   /**

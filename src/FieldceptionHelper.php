@@ -207,20 +207,21 @@ class FieldceptionHelper {
    *
    * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
    *   The subfield definition.
+   * @param string $widget_type
+   *   The widget type.
    * @param array $settings
    *   A settings array.
    *
    * @return \Drupal\Core\Field\WidgetInterface
    *   The widget plugin.
    */
-  public function getSubfieldWidget(FieldDefinitionInterface $subfield_definition, array $settings = []) {
+  public function getSubfieldWidget(FieldDefinitionInterface $subfield_definition, $widget_type, array $settings = []) {
     $key = $this->toKey([
       $subfield_definition,
       $settings,
     ]);
     if (!isset($this->subfieldWidgets[$key])) {
-      $field_type_definition = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType());
-      $this->subfieldWidgets[$key] = $this->fieldWidgetPluginManager->createInstance($field_type_definition['default_widget'], [
+      $this->subfieldWidgets[$key] = $this->fieldWidgetPluginManager->createInstance($widget_type, [
         'field_definition' => $subfield_definition,
         'settings' => $settings,
         'third_party_settings' => [],
@@ -230,10 +231,26 @@ class FieldceptionHelper {
   }
 
   /**
+   * Get default widget for a subfield.
+   *
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
+   *
+   * @return string
+   *   The default widget id.
+   */
+  public function getSubfieldDefaultWidget(FieldDefinitionInterface $subfield_definition) {
+    $field_type_definition = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType());
+    return $field_type_definition['default_widget'];
+  }
+
+  /**
    * Get subfield formatter.
    *
    * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
    *   The subfield definition.
+   * @param string $formatter_type
+   *   The formatter type.
    * @param array $settings
    *   A settings array.
    * @param string $view_mode
@@ -244,7 +261,7 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\WidgetInterface
    *   The widget plugin.
    */
-  public function getSubfieldFormatter(FieldDefinitionInterface $subfield_definition, array $settings = [], $view_mode = 'default', $label = '') {
+  public function getSubfieldFormatter(FieldDefinitionInterface $subfield_definition, $formatter_type, array $settings = [], $view_mode = 'default', $label = '') {
     $key = $this->toKey([
       $subfield_definition,
       $settings,
@@ -252,7 +269,7 @@ class FieldceptionHelper {
     ]);
     if (!isset($this->subfieldFormatters[$key])) {
       $field_type_definition = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType());
-      $this->subfieldFormatters[$key] = $this->fieldFormatterPluginManager->createInstance($field_type_definition['default_formatter'], [
+      $this->subfieldFormatters[$key] = $this->fieldFormatterPluginManager->createInstance($formatter_type, [
         'field_definition' => $subfield_definition,
         'settings' => $settings,
         'label' => $label,
@@ -261,6 +278,20 @@ class FieldceptionHelper {
       ]);
     }
     return $this->subfieldFormatters[$key];
+  }
+
+  /**
+   * Get default formatter for a subfield.
+   *
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
+   *
+   * @return string
+   *   The default formatter id.
+   */
+  public function getSubfieldDefaultFormatter(FieldDefinitionInterface $subfield_definition) {
+    $field_type_definition = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType());
+    return $field_type_definition['default_formatter'];
   }
 
   /**
@@ -356,8 +387,28 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\FieldTypePluginManagerInterface
    *   The field type manager plugin.
    */
-  public function getfieldTypePluginManager() {
+  public function getFieldTypePluginManager() {
     return $this->fieldTypePluginManager;
+  }
+
+  /**
+   * Get the field widget manager plugin.
+   *
+   * @return \Drupal\Core\Field\WidgetPluginManager
+   *   The field widget manager plugin.
+   */
+  public function getFieldWidgetPluginManager() {
+    return $this->fieldWidgetPluginManager;
+  }
+
+  /**
+   * Get the field formatter manager plugin.
+   *
+   * @return \\Drupal\Core\Field\FieldDefinitionInterface
+   *   The field formatter manager plugin.
+   */
+  public function getFieldFormatterPluginManager() {
+    return $this->fieldFormatterPluginManager;
   }
 
 }

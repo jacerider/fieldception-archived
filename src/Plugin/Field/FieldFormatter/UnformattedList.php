@@ -30,7 +30,8 @@ class UnformattedList extends FieldceptionBase {
       foreach ($field_settings['storage'] as $subfield => $config) {
         $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
-        $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_settings, $this->viewMode, $this->label);
+        $subfield_formatter_type = $this->getSubfieldFormatterType($subfield_definition);
+        $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
         $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
         $element[$delta][$subfield] = $subfield_formatter->viewElements($subfield_items, $langcode);
       }

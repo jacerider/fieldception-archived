@@ -4,3 +4,22 @@
  * @file
  * Contains fieldception.module.
  */
+
+/**
+ * Implements hook_theme().
+ */
+function fieldception_theme() {
+  $themes['fieldception_subfield'] = [
+    'variables' => [
+      'definition' => NULL,
+      'label' => NULL,
+      'label_display' => 'above',
+      'content' => NULL,
+      'attributes' => NULL,
+      'title_attributes' => NULL,
+      'content_attributes' => NULL,
+    ],
+    'file' => 'fieldception.theme.inc',
+  ];
+  return $themes;
+}

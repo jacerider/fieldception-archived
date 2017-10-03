@@ -43,6 +43,11 @@ class Fieldception extends FieldItemBase {
         $settings['fields_default'],
         $settings['fields'][$subfield]
       );
+      // Merge into storage settings.
+      $settings['storage'][$subfield] = NestedArray::mergeDeep(
+        $settings['fields'][$subfield],
+        $settings['storage'][$subfield]
+      );
     }
 
     return $settings;
@@ -285,7 +290,7 @@ class Fieldception extends FieldItemBase {
 
     foreach ($settings['storage'] as $subfield => $config) {
       $field_config = $settings['fields'][$subfield];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield, $field_config['settings']);
+      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
 

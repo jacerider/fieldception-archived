@@ -71,6 +71,12 @@ abstract class FieldceptionBase extends FormatterBase {
           'wrapper' => $wrapper_id,
         ],
       ];
+      $element['fields'][$subfield]['label_display'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Label display'),
+        '#options' => $this->getFieldLabelOptions(),
+        '#default_value' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
+      ];
       $element['fields'][$subfield]['settings'] = [];
       $element['fields'][$subfield]['settings'] = $subfield_formatter->settingsForm($element['fields'][$subfield]['settings'], $form_state);
     }
@@ -101,6 +107,21 @@ abstract class FieldceptionBase extends FormatterBase {
       }
     }
     return $settings;
+  }
+
+  /**
+   * Returns an array of visibility options for field labels.
+   *
+   * @return array
+   *   An array of visibility options.
+   */
+  protected function getFieldLabelOptions() {
+    return [
+      'above' => $this->t('Above'),
+      'inline' => $this->t('Inline'),
+      'hidden' => '- ' . $this->t('Hidden') . ' -',
+      'visually_hidden' => '- ' . $this->t('Visually Hidden') . ' -',
+    ];
   }
 
   /**

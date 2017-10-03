@@ -33,7 +33,13 @@ class UnformattedList extends FieldceptionBase {
         $subfield_formatter_type = $this->getSubfieldFormatterType($subfield_definition);
         $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
         $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
-        $element[$delta][$subfield] = $subfield_formatter->viewElements($subfield_items, $langcode);
+        $element[$delta][$subfield] = [
+          '#theme' => 'fieldception_subfield',
+          '#definition' => $subfield_definition,
+          '#label' => $config['label'],
+          '#label_display' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
+          '#content' => $subfield_formatter->viewElements($subfield_items, $langcode),
+        ];
       }
     }
 

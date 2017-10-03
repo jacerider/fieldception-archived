@@ -1,0 +1,33 @@
+{#
+/**
+ * @file
+ * Default theme implementation for a fieldception subfield.
+ *
+ * @see template_preprocess_fieldception_subfield()
+ *
+ * @ingroup themeable
+ */
+#}
+{%
+  set classes = [
+    'subfield',
+    subfield_name|replace({'field_':''})|clean_class,
+    label_display != 'visually_hidden' and label_display != 'hidden' ? 'label-' ~ label_display|clean_class,
+  ]
+%}
+{%
+  set title_classes = [
+    'subfield-label',
+    label_display == 'visually_hidden' ? 'visually-hidden',
+  ]
+%}
+{% if label_hidden %}
+  <div{{ attributes }}>
+    {{ content }}
+  </div>
+{% else %}
+  <div{{ attributes.addClass(classes)  }}>
+    <div{{ title_attributes.addClass(title_classes) }}>{{ label }}</div>
+    <div{{ content_attributes }}>{{ content }}</div>
+  </div>
+{% endif %}

@@ -128,6 +128,19 @@ class Fieldception extends WidgetBase {
     foreach (Element::children($elements) as $delta) {
       $elements[$delta] = $this->formElementRemoveTitle($elements[$delta], $delta);
     }
+
+    if ($elements) {
+      // Allow modules to alter the full field widget form element.
+      $context = [
+        'form' => $form,
+        'widget' => $this,
+        'items' => $items,
+        'delta' => $delta,
+        'default' => $this->isDefaultValueWidget($form_state),
+      ];
+      \Drupal::moduleHandler()->alter(['field_widget_form', 'field_widget_' . $this->getPluginId() . '_form'], $elements, $form_state, $context);
+    }
+
     return $elements;
   }
 
@@ -174,12 +187,15 @@ class Fieldception extends WidgetBase {
       $element[$subfield] = [
         '#type' => 'container',
         '#tree' => TRUE,
-        '#fieldception_required' => !empty($field_settings['fields'][$subfield]['required']),
       ];
       $element[$subfield]['value'] = [
         '#title' => $config['label'],
         '#required' => FALSE,
         '#field_parents' => $element['#field_parents'],
+        '#delta' => 0,
+        '#weight' => 0,
+        // Integrations with field_labels module.
+        '#title_lock' => TRUE,
       ];
 
       $element[$subfield]['value'] = $subfield_widget->formElement($subfield_items, 0, $element[$subfield]['value'], $form, $form_state);

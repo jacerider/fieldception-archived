@@ -23,3 +23,14 @@ function fieldception_theme() {
   ];
   return $themes;
 }
+
+/**
+ * Implements theme_preprocess_field_multiple_value_form().
+ */
+function fieldception_preprocess_field_multiple_value_form(&$variables) {
+  if (isset($variables['element']['#fieldception_drag']) && empty($variables['element']['#fieldception_drag'])) {
+    // Remove tabledrag if field is not set to be draggable.
+    unset($variables['table']['#tabledrag']);
+    unset($variables['table']['#header'][1]);
+  }
+}

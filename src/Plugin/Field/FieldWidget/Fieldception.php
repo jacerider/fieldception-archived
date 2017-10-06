@@ -9,7 +9,6 @@ use Drupal\Core\Render\Element;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
 use Symfony\Component\Validator\ConstraintViolationInterface;
-use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 /**
  * Plugin implementation of the 'double_field' widget.
@@ -27,7 +26,9 @@ class Fieldception extends WidgetBase {
    */
   public static function defaultSettings() {
     return [
-      'inline' => FALSE,
+      'inline' => TRUE,
+      'draggable' => FALSE,
+      'more_label' => 'Add another item',
       'fields' => [],
     ] + parent::defaultSettings();
   }
@@ -41,13 +42,28 @@ class Fieldception extends WidgetBase {
     $field_settings = $this->getFieldSettings();
     $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
     $field_name = $this->fieldDefinition->getName();
+    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
 
     $element = [];
     $element['inline'] = [
       '#type' => 'checkbox',
-      '#title' => t('Display as inline element'),
+      '#title' => $this->t('Display as inline element'),
       '#default_value' => $settings['inline'],
     ];
+
+    if ($cardinality !== 1) {
+      $element['draggable'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Allow values to be ordered'),
+        '#default_value' => $settings['draggable'],
+      ];
+      $element['more_label'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Label for add more button'),
+        '#required' => TRUE,
+        '#default_value' => $settings['more_label'],
+      ];
+    }
 
     $element['fields'] = [
       '#tree' => TRUE,
@@ -111,10 +127,17 @@ class Fieldception extends WidgetBase {
   public function settingsSummary() {
     $settings = $this->getSettings();
     $field_settings = $this->getFieldSettings();
+    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
+
     $summary = [];
 
     if ($settings['inline']) {
-      $summary[] = t('Display as inline element');
+      $summary[] = $this->t('Display as inline element');
+    }
+
+    if ($cardinality !== 1) {
+      $summary[] = $this->t('Allow ordering: %value', ['%value' => $settings['draggable'] ? 'Yes' : 'No']);
+      $summary[] = $this->t('More label: %value', ['%value' => $settings['more_label']]);
     }
 
     return $summary;
@@ -125,11 +148,29 @@ class Fieldception extends WidgetBase {
    */
   protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
     $elements = parent::formMultipleElements($items, $form, $form_state);
+    $settings = $this->getSettings();
+    $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
+    $is_multiple = $cardinality !== 1;
+
     foreach (Element::children($elements) as $delta) {
       $elements[$delta] = $this->formElementRemoveTitle($elements[$delta], $delta);
     }
 
     if ($elements) {
+      if (isset($elements['add_more'])) {
+        $elements['add_more']['#value'] = $settings['more_label'];
+      }
+
+      if ($is_multiple) {
+        $elements['#fieldception_drag'] = $settings['draggable'];
+        if (empty($settings['draggable'])) {
+          foreach (Element::children($elements) as $delta) {
+            $element = &$elements[$delta];
+            unset($element['_weight']);
+          }
+        }
+      }
+
       // Allow modules to alter the full field widget form element.
       $context = [
         'form' => $form,

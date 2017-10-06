@@ -85,6 +85,15 @@ abstract class FieldceptionBase extends FormatterBase {
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function settingsSummary() {
+    return [
+      'Inception of the field',
+    ];
+  }
+
+  /**
    * Ajax callback for the handler settings form.
    *
    * @see static::fieldSettingsForm()

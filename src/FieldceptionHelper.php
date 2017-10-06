@@ -93,6 +93,7 @@ class FieldceptionHelper {
    */
   protected function toKey(array $value) {
     $key = '';
+    ksort($value);
     foreach ($value as $i => $v) {
       if ($v instanceof FieldItemListInterface) {
         $v = $v->first()->getValue();
@@ -161,12 +162,8 @@ class FieldceptionHelper {
           }
         }
       }
-      $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldStorageDefinition($type, $definition)
-        ->setKey($key)
-        // Subfields only support single values.
-        ->setCardinality(1)
-        ->setSubfield($subfield)
-        ->setSettings($config['settings']);
+      $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
+        ->setKey($key);
     }
     return $this->subfieldDefinitions[$key];
   }
@@ -218,6 +215,7 @@ class FieldceptionHelper {
   public function getSubfieldWidget(FieldDefinitionInterface $subfield_definition, $widget_type, array $settings = []) {
     $key = $this->toKey([
       $subfield_definition,
+      $widget_type,
       $settings,
     ]);
     if (!isset($this->subfieldWidgets[$key])) {
@@ -264,6 +262,7 @@ class FieldceptionHelper {
   public function getSubfieldFormatter(FieldDefinitionInterface $subfield_definition, $formatter_type, array $settings = [], $view_mode = 'default', $label = '') {
     $key = $this->toKey([
       $subfield_definition,
+      $formatter_type,
       $settings,
       $view_mode,
     ]);
@@ -314,16 +313,14 @@ class FieldceptionHelper {
       $delta,
     ]);
     if (!isset($this->subfieldItemLists[$key])) {
-      $field_name = $subfield_definition->getName();
+      $field_name = $subfield_definition->getParentfield();
       $subfield = $subfield_definition->getSubfield();
-      $subfield_storage = $this->getSubfieldStorage($subfield_definition);
+
+      $subfield_list_class = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType())['list_class'];
+      $field_item_list = $subfield_list_class::createInstance($subfield_definition->getFieldStorageDefinition(), $subfield_definition->getName(), $entity->getTypedData());
 
       // Convert values to subvalues.
       $value = $this->convertValueToSubfieldValue($subfield_definition, $entity->get($field_name)->get($delta)->toArray());
-
-      $subfield_list_class = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType())['list_class'];
-      $field_item_list = $subfield_list_class::createInstance($subfield_definition->getFieldStorageDefinition(), $subfield, $entity->getTypedData());
-
       $value = !empty($value) ? $value : '';
       $field_item_list->setValue($value);
       $this->subfieldItemLists[$key] = $field_item_list;

@@ -4,9 +4,7 @@ namespace Drupal\fieldception\Plugin\Field;
 
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\FieldableEntityInterface;
-use Drupal\Core\Field\TypedData\FieldItemDataDefinition;
 use Drupal\Core\TypedData\OptionsProviderInterface;
-use Drupal\Core\Field\FieldItemList;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 
 /**
@@ -55,27 +53,25 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
   }
 
   /**
-   * Sets the subfield.
-   *
-   * @param string $subfield
-   *   The subfield to set.
-   *
-   * @return static
-   *   The object itself for chaining.
-   */
-  public function setSubfield($subfield) {
-    $this->subfield = $subfield;
-    return $this;
-  }
-
-  /**
    * Gets the subfield.
    *
    * @return string
-   *   The subfield.
+   *   The subfield name.
    */
   public function getSubfield() {
-    return $this->subfield;
+    $parts = explode(':', $this->getName());
+    return $parts[1];
+  }
+
+  /**
+   * Gets the parent field.
+   *
+   * @return string
+   *   The parent field name.
+   */
+  public function getParentfield() {
+    $parts = explode(':', $this->getName());
+    return $parts[0];
   }
 
   /**
@@ -87,25 +83,34 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    * definition in places where a full field definition is required; e.g., with
    * widgets or formatters.
    *
-   * @param string $type
-   *   The type of the field.
    * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
    *   The field storage definition to base the new field definition upon.
+   * @param array $config
+   *   An array of configuration options with the following keys:
+   *   - type: The field type id.
+   *   - label: The label of the field.
+   *   - settings: An array of storage settings.
+   * @param string $subfield
+   *   The subfield name.
    *
    * @return $this
    */
-  public static function createFromParentFieldStorageDefinition($type, FieldStorageDefinitionInterface $definition) {
-    return static::create($type)
-      ->setCardinality($definition->getCardinality())
+  public static function createFromParentFieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
+    // FieldceptionHelper->getSubfieldItemList() will convert this back to
+    // the actual field name.
+    $name = $definition->getName() . ':' . $subfield;
+    return static::create($config['type'])
+      // Subfields only support single values.
+      ->setCardinality(1)
       ->setConstraints($definition->getConstraints())
       ->setCustomStorage($definition->hasCustomStorage())
       ->setDescription($definition->getDescription())
-      ->setLabel($definition->getLabel())
-      ->setName($definition->getName())
+      ->setLabel($config['label'])
+      ->setName($name)
       ->setProvider($definition->getProvider())
       ->setQueryable($definition->isQueryable())
       ->setRevisionable($definition->isRevisionable())
-      ->setSettings($definition->getSettings())
+      ->setSettings($config['settings'])
       ->setTargetEntityTypeId($definition->getTargetEntityTypeId())
       ->setTranslatable($definition->isTranslatable());
   }
@@ -115,42 +120,14 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    */
   public function getOptionsProvider($property_name, FieldableEntityInterface $entity) {
     if (is_subclass_of($this->getFieldItemClass(), OptionsProviderInterface::class)) {
-      // $fieldception_helper = \Drupal::service('fieldception.helper');
-      // $items = $fieldception_helper->getSubfieldItemList($this->getFieldStorageDefinition(), $entity);
-      $items = FieldItemList::createInstance($this->getFieldStorageDefinition(), $name = NULL, $entity->getTypedData());
-      return \Drupal::service('plugin.manager.field.field_type')->createFieldItem($items, 0);
-    }
-    // @todo: Allow setting custom options provider, see
-    // https://www.drupal.org/node/2002138.
-  }
+      $field_type_plugin_manager = \Drupal::service('plugin.manager.field.field_type');
 
-  /**
-   * {@inheritdoc}
-   */
-  public function getPropertyDefinitions() {
-    if (!isset($this->propertyDefinitions) || TRUE) {
-      $class = $this->getFieldItemClass();
-      $this->propertyDefinitions = $class::propertyDefinitions($this);
-      // if ($this->subfield) {
-      //   $subfield_property_definitions = [];
-      //   foreach ($this->propertyDefinitions as $key => $value) {
-      //     $subfield_property_definitions[$this->subfield . '_' . $key] = $value;
-      //   }
-      //   $this->propertyDefinitions = $subfield_property_definitions;
-      // }
-    }
-    return $this->propertyDefinitions;
-  }
+      $item_list_class = $field_type_plugin_manager->getDefinition($this->getFieldStorageDefinition()->getType())['list_class'];
 
-  /**
-   * {@inheritdoc}
-   */
-  // public function getPropertyNames() {
-  //   $names = [];
-  //   foreach ($this->getPropertyDefinitions() as $property_name => $property) {
-  //     $names[] = $this->subfield . '_' . $property_name;
-  //   }
-  //   return $names;
-  // }
+      $items_list = $item_list_class::createInstance($this->getFieldStorageDefinition(), $this->getName(), $entity->getTypedData());
+      $item = $field_type_plugin_manager->createFieldItem($items_list, 0);
+      return $item;
+    }
+  }
 
 }

@@ -357,6 +357,9 @@ class Fieldception extends FieldItemBase {
         }
       }
       foreach ($subfield_storage::propertyDefinitions($subfield_definition) as $column => $property) {
+        if ($property->isComputed()) {
+          continue;
+        }
         $subfield_column = $subfield . '_' . $column;
         if (!empty($settings['fields'][$subfield]['required'])) {
           // NotBlank validator is not suitable for booleans because it does not

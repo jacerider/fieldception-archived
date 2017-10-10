@@ -19,7 +19,7 @@ use Symfony\Component\Validator\ConstraintViolationInterface;
  *   field_types = {"fieldception"}
  * )
  */
-class Fieldception extends WidgetBase {
+class FieldceptionWidget extends WidgetBase {
 
   /**
    * {@inheritdoc}
@@ -28,6 +28,7 @@ class Fieldception extends WidgetBase {
     return [
       'inline' => TRUE,
       'draggable' => FALSE,
+      'fields_per_row' => 0,
       'more_label' => 'Add another item',
       'fields' => [],
     ] + parent::defaultSettings();
@@ -49,6 +50,18 @@ class Fieldception extends WidgetBase {
       '#type' => 'checkbox',
       '#title' => $this->t('Display as inline element'),
       '#default_value' => $settings['inline'],
+    ];
+
+    $options = [0 => 'All fields in same row'];
+    for ($i = 1; $i <= count($field_settings['storage']); $i++) {
+      $options[$i] = $i;
+    }
+    $element['fields_per_row'] = [
+      '#type' => 'select',
+      '#options' => $options,
+      '#required' => TRUE,
+      '#title' => $this->t('Fields per row'),
+      '#default_value' => $settings['fields_per_row'],
     ];
 
     if ($cardinality !== 1) {
@@ -96,7 +109,7 @@ class Fieldception extends WidgetBase {
       $element['fields'][$subfield]['type'] = [
         '#type' => 'select',
         '#title' => $this->t('Widget'),
-        '#options' => $fieldception_helper->getFieldWidgetPluginManager()->getOptions($config['type']),
+        '#options' => $fieldception_helper->getFieldWidgetPluginManager()->getOptions($subfield_definition->getBaseType()),
         '#default_value' => $subfield_widget_type,
         '#required' => TRUE,
         '#ajax' => [
@@ -131,9 +144,8 @@ class Fieldception extends WidgetBase {
 
     $summary = [];
 
-    if ($settings['inline']) {
-      $summary[] = $this->t('Display as inline element');
-    }
+    $summary[] = $this->t('Display as inline element: %value', ['%value' => $settings['inline'] ? 'Yes' : 'No']);
+    $summary[] = $this->t('Fields per row: %value', ['%value' => empty($settings['fields_per_row']) ? 'All' : $settings['fields_per_row']]);
 
     if ($cardinality !== 1) {
       $summary[] = $this->t('Allow ordering: %value', ['%value' => $settings['draggable'] ? 'Yes' : 'No']);
@@ -213,9 +225,11 @@ class Fieldception extends WidgetBase {
     $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
 
     $element['#type'] = $cardinality === 1 ? 'fieldset' : 'container';
-    if ($settings['inline']) {
-      $element['#attributes']['class'][] = 'container-inline';
-    }
+    $element['#attributes']['class'][] = $cardinality === 1 ? 'fieldception-single' : 'fieldception-multiple';
+
+    $count = $group = 1;
+    $fields_per_row = $settings['fields_per_row'];
+    $element['#attributes']['class'][] = 'fieldception-groups-' . $fields_per_row;
 
     foreach ($field_settings['storage'] as $subfield => $config) {
       $subfield_field_settings = isset($field_settings['fields'][$subfield]['settings']) ? $field_settings['fields'][$subfield]['settings'] : [];
@@ -225,11 +239,21 @@ class Fieldception extends WidgetBase {
       $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type, $subfield_settings);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
 
-      $element[$subfield] = [
+      if (!isset($element['group_' . $group])) {
+        $element['group_' . $group] = [
+          '#type' => 'container',
+          '#process' => [[get_class(), 'processParents']],
+          '#attributes' => ['class' => ['fieldception-group']],
+        ];
+        if ($settings['inline']) {
+          $element['group_' . $group]['#attributes']['class'][] = 'container-inline';
+        }
+      }
+
+      $element['group_' . $group][$subfield] = [
         '#type' => 'container',
-        '#tree' => TRUE,
       ];
-      $element[$subfield]['value'] = [
+      $element['group_' . $group][$subfield]['value'] = [
         '#title' => $config['label'],
         '#required' => FALSE,
         '#field_parents' => $element['#field_parents'],
@@ -239,7 +263,15 @@ class Fieldception extends WidgetBase {
         '#title_lock' => TRUE,
       ];
 
-      $element[$subfield]['value'] = $subfield_widget->formElement($subfield_items, 0, $element[$subfield]['value'], $form, $form_state);
+      $element['group_' . $group][$subfield]['value'] = $subfield_widget->formElement($subfield_items, 0, $element['group_' . $group][$subfield]['value'], $form, $form_state);
+
+      if ($fields_per_row && $count >= $fields_per_row) {
+        $count = 1;
+        $group++;
+      }
+      else {
+        $count++;
+      }
     }
 
     return $element;
@@ -248,10 +280,21 @@ class Fieldception extends WidgetBase {
   /**
    * {@inheritdoc}
    */
+  public static function processParents(&$element, FormStateInterface $form_state, &$complete_form) {
+    array_pop($element['#parents']);
+    return $element;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function errorElement(array $element, ConstraintViolationInterface $error, array $form, FormStateInterface $form_state) {
     $subfield_delta = preg_replace('/\D/', '', $error->arrayPropertyPath[0]);
-    if (isset($element['value_' . $subfield_delta]['value'])) {
-      return $element['value_' . $subfield_delta]['value'];
+    foreach (Element::children($element) as $delta) {
+      $group = $element[$delta];
+      if (isset($group['value_' . $subfield_delta]['value'])) {
+        return $element[$delta]['value_' . $subfield_delta]['value'];
+      }
     }
     return [];
   }
@@ -267,6 +310,7 @@ class Fieldception extends WidgetBase {
 
     $new_values = [];
     foreach ($values as $delta => $value) {
+      $new_values[$delta] = [];
       foreach ($field_settings['storage'] as $subfield => $config) {
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
@@ -278,8 +322,10 @@ class Fieldception extends WidgetBase {
           $subvalues = reset($subvalues);
         }
         foreach ($subvalues as $key => $subvalue) {
-          $column = str_replace($subfield . '_', '', $key);
-          $new_values[$delta][$subfield . '_' . $column] = $subvalue;
+          if ($subvalue || $subvalue === '0') {
+            $column = str_replace($subfield . '_', '', $key);
+            $new_values[$delta][$subfield . '_' . $column] = $subvalue;
+          }
         }
       }
       // Remove empty rows.
@@ -293,7 +339,7 @@ class Fieldception extends WidgetBase {
     foreach ($new_values as $delta => $values) {
       foreach ($schema['columns'] as $column_name => $column) {
         if (!isset($new_values[$delta][$column_name])) {
-          $new_values[$delta][$column_name] = '';
+          $new_values[$delta][$column_name] = NULL;
         }
       }
     }

@@ -75,6 +75,26 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function getType() {
+    $field_type_plugin_manager = \Drupal::service('plugin.manager.field.field_type');
+    $definitions = $field_type_plugin_manager->getDefinitions();
+    $type = $this->getBaseType();
+    if (isset($definitions['fieldception_' . $type])) {
+      $type = 'fieldception_' . $type;
+    }
+    return $type;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getBaseType() {
+    return $this->type;
+  }
+
+  /**
    * Creates a new field definition based upon a field storage definition.
    *
    * In cases where one needs a field storage definitions to act like full

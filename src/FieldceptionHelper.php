@@ -96,7 +96,12 @@ class FieldceptionHelper {
     ksort($value);
     foreach ($value as $i => $v) {
       if ($v instanceof FieldItemListInterface) {
-        $v = $v->first()->getValue();
+        if (!$v->isEmpty()) {
+          $v = $v->first()->getValue();
+        }
+        else {
+          $v = 'e';
+        }
       }
       if (is_array($v)) {
         $v = $this->toKey($v);
@@ -118,7 +123,40 @@ class FieldceptionHelper {
       $v = empty($key) ? $v : '--' . $v;
       $key .= strtolower(preg_replace('/[^\da-z\-\:]/i', '', $v));
     }
-    return $key;
+    return md5($key);
+  }
+
+  /**
+   * Prepare config.$_COOKIE
+   *
+   * Supports preconfigured fields.
+   *
+   * @param array $config
+   *   An array of configuration options with the following keys:
+   *   - type: The field type id.
+   *   - label: The label of the field.
+   *   - settings: An array of storage settings.
+   */
+  protected function prepareConfig(array &$config) {
+    $type = $config['type'];
+    // Check if we're dealing with a preconfigured field.
+    if (strpos($type, 'field_ui:') !== FALSE) {
+      // @see \Drupal\field_ui\Form\FieldStorageAddForm::submitForm
+      list(, $type, $option_key) = explode(':', $type, 3);
+      $config['type'] = $type;
+
+      $field_type_class = $this->fieldTypePluginManager->getDefinition($type)['class'];
+      $field_options = $field_type_class::getPreconfiguredOptions()[$option_key];
+
+      // Merge in preconfigured field storage options.
+      if (isset($field_options['field_storage_config'])) {
+        foreach (['settings'] as $key) {
+          if (isset($field_options['field_storage_config'][$key]) && empty($config[$key])) {
+            $config[$key] = $field_options['field_storage_config'][$key];
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -138,30 +176,13 @@ class FieldceptionHelper {
    *   A subfield definition.
    */
   public function getSubfieldDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
+    $this->prepareConfig($config);
     $key = $this->toKey([
       $definition,
       $config,
       $subfield,
     ]);
     if (!isset($this->subfieldDefinitions[$key])) {
-      $type = $config['type'];
-      // Check if we're dealing with a preconfigured field.
-      if (strpos($type, 'field_ui:') !== FALSE) {
-        // @see \Drupal\field_ui\Form\FieldStorageAddForm::submitForm
-        list(, $type, $option_key) = explode(':', $type, 3);
-
-        $field_type_class = $this->fieldTypePluginManager->getDefinition($type)['class'];
-        $field_options = $field_type_class::getPreconfiguredOptions()[$option_key];
-
-        // Merge in preconfigured field storage options.
-        if (isset($field_options['field_storage_config'])) {
-          foreach (['settings'] as $key) {
-            if (isset($field_options['field_storage_config'][$key])) {
-              $config[$key] = $field_options['field_storage_config'][$key];
-            }
-          }
-        }
-      }
       $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
         ->setKey($key);
     }
@@ -191,7 +212,8 @@ class FieldceptionHelper {
         'name' => $subfield_definition->getName(),
         'parent' => $subfield_item_list,
       ]);
-      if ($subfield_item_list) {
+
+      if ($subfield_item_list && !$subfield_item_list->isEmpty()) {
         $storage->setValue($subfield_item_list->first()->getValue());
       }
       $this->subfieldStorage[$key] = $storage;
@@ -302,15 +324,19 @@ class FieldceptionHelper {
    *   The parent entity.
    * @param int $delta
    *   The parent entity value delta.
+   * @param array $values
+   *   An array of values to set to the item list. If none is supplied the
+   *   entity value will be used.
    *
    * @return \Drupal\Core\Field\FieldItemListInterface
    *   The field item list.
    */
-  public function getSubfieldItemList(FieldDefinitionInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0) {
+  public function getSubfieldItemList(FieldDefinitionInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0, array $values = NULL) {
     $key = $this->toKey([
       $subfield_definition,
       $entity,
       $delta,
+      $values,
     ]);
     if (!isset($this->subfieldItemLists[$key])) {
       $field_name = $subfield_definition->getParentfield();
@@ -320,7 +346,8 @@ class FieldceptionHelper {
       $field_item_list = $subfield_list_class::createInstance($subfield_definition->getFieldStorageDefinition(), $subfield_definition->getName(), $entity->getTypedData());
 
       // Convert values to subvalues.
-      $value = $this->convertValueToSubfieldValue($subfield_definition, $entity->get($field_name)->get($delta)->toArray());
+      $values = is_array($values) ? $values : $entity->get($field_name)->get($delta)->toArray();
+      $value = $this->convertValueToSubfieldValue($subfield_definition, $values);
       $value = !empty($value) ? $value : '';
       $field_item_list->setValue($value);
       $this->subfieldItemLists[$key] = $field_item_list;
@@ -355,26 +382,60 @@ class FieldceptionHelper {
   }
 
   /**
+   * Convert subfield value to parent value.
+   *
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
+   * @param array $subfield_value
+   *   The array containing the delta value.
+   *
+   * @return array
+   *   An array containing the parent value.
+   */
+  public function convertSubfieldValueToValue(FieldDefinitionInterface $subfield_definition, array $subfield_value) {
+    $subfield = $subfield_definition->getSubfield();
+    $subfield_storage = $this->getSubfieldStorage($subfield_definition);
+    $value = [];
+    $schema = $subfield_storage::schema($subfield_definition);
+    foreach ($schema['columns'] as $column_name => $column) {
+      $parent_column_name = $subfield . '_' . $column_name;
+      if (isset($subfield_value[$column_name])) {
+        $value[$parent_column_name] = $subfield_value[$column_name];
+      }
+    }
+    return $value;
+  }
+
+  /**
    * Get a cloned FormState ready for sub plugins.
    *
-   * @param array $config
-   *   An array of configuration options with the following keys:
-   *   - type: The field type id.
-   *   - label: The label of the field.
-   *   - settings: An array of storage settings.
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   The form state of the (entire) configuration form.
    *
    * @return \Drupal\Core\Form\FormStateInterface
    *   A form state ready for use in sub plugins.
    */
-  public function getSubfieldFormState(array $config, FormStateInterface $form_state) {
+  public function getSubfieldFormState(FieldDefinitionInterface $subfield_definition, FormStateInterface $form_state) {
+    $settings = $subfield_definition->getSettings();
     $subform_state = clone $form_state;
-    $field = clone $subform_state->getFormObject()->getEntity();
-    $field->setSettings($config['settings']);
-    $field_storage_definition = $field->getFieldStorageDefinition();
-    $field_storage_definition->setSettings($config['settings']);
-    $subform_state->getFormObject()->setEntity($field);
+
+    $parent_field = $subform_state->getFormObject()->getEntity();
+    $subfield_storage = clone $parent_field->getFieldStorageDefinition();
+    $subfield_storage->setSettings($settings);
+    $field_array = $parent_field->toArray();
+    $field_array['field_storage'] = $subfield_storage;
+    $field_array['settings'] = $settings;
+
+    // Create a new temporary field config entity with our modified storage.
+    $field = \Drupal::entityTypeManager()->getStorage($parent_field->getEntityTypeId())->create($field_array);
+
+    // Clone field state and set the subfield storage as the form object.
+    $subform_object = clone $subform_state->getFormObject();
+    $subform_object->setEntity($field);
+    $subform_state->setFormObject($subform_object);
+
     return $subform_state;
   }
 

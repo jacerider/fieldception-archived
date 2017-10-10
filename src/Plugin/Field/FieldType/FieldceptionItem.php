@@ -18,7 +18,7 @@ use Drupal\Component\Utility\NestedArray;
  *   default_formatter = NULL,
  * )
  */
-class Fieldception extends FieldItemBase {
+class FieldceptionItem extends FieldItemBase {
 
   /**
    * {@inheritdoc}
@@ -289,10 +289,10 @@ class Fieldception extends FieldItemBase {
     ];
 
     foreach ($settings['storage'] as $subfield => $config) {
-      $field_config = $settings['fields'][$subfield];
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
+      $subfield_form_state = $fieldception_helper->getSubfieldFormState($subfield_definition, $form_state);
 
       $element['fields'][$subfield] = [
         '#type' => 'details',
@@ -304,11 +304,11 @@ class Fieldception extends FieldItemBase {
       $element['fields'][$subfield]['required'] = [
         '#type' => 'checkbox',
         '#title' => t('Required'),
-        '#default_value' => $field_config['required'],
+        '#default_value' => $config['required'],
       ];
 
       $element['fields'][$subfield]['settings'] = [];
-      $element['fields'][$subfield]['settings'] = $subfield_storage->fieldSettingsForm($element['fields'][$subfield]['settings'], $form_state);
+      $element['fields'][$subfield]['settings'] = $subfield_storage->fieldSettingsForm($element['fields'][$subfield]['settings'], $subfield_form_state);
     }
 
     return $element;
@@ -390,7 +390,7 @@ class Fieldception extends FieldItemBase {
 
     foreach ($settings['storage'] as $subfield => $config) {
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
+      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
 
       if (!$subfield_storage->isEmpty()) {
@@ -415,6 +415,7 @@ class Fieldception extends FieldItemBase {
       $schema = $subfield_storage::schema($subfield_definition);
       if (isset($schema['columns'])) {
         foreach ($schema['columns'] as $column_name => $column) {
+          $column['allow null'] = TRUE;
           $columns[$subfield . '_' . $column_name] = $column;
         }
       }
@@ -434,10 +435,28 @@ class Fieldception extends FieldItemBase {
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
       foreach ($subfield_storage::propertyDefinitions($subfield_definition) as $property_name => $property) {
+        $property->setRequired(FALSE);
         $properties[$subfield . '_' . $property_name] = $property;
       }
     }
     return $properties;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setValue($values, $notify = TRUE) {
+    $fieldception_helper = \Drupal::service('fieldception.helper');
+    $settings = $this->getSettings();
+    $entity = $this->getEntity();
+    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    foreach ($settings['storage'] as $subfield => $config) {
+      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
+      $subfield_values = $fieldception_helper->convertValueToSubfieldValue($subfield_definition, $values);
+      $subfield_storage->setValue($subfield_values);
+    }
+    parent::setValue($values, $notify);
   }
 
 }

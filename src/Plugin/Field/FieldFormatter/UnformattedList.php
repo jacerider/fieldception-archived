@@ -27,19 +27,25 @@ class UnformattedList extends FieldceptionBase {
 
     $element = [];
     foreach ($items as $delta => $item) {
+      $element[$delta] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['subfield-unformatted-list']],
+      ];
       foreach ($field_settings['storage'] as $subfield => $config) {
         $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_formatter_type = $this->getSubfieldFormatterType($subfield_definition);
         $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
         $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
-        $element[$delta][$subfield] = [
-          '#theme' => 'fieldception_subfield',
-          '#definition' => $subfield_definition,
-          '#label' => $config['label'],
-          '#label_display' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
-          '#content' => $subfield_formatter->viewElements($subfield_items, $langcode),
-        ];
+        if (!$subfield_items->isEmpty()) {
+          $element[$delta][$subfield] = [
+            '#theme' => 'fieldception_subfield',
+            '#definition' => $subfield_definition,
+            '#label' => $config['label'],
+            '#label_display' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
+            '#content' => $subfield_formatter->viewElements($subfield_items, $langcode),
+          ];
+        }
       }
     }
 

@@ -5,6 +5,10 @@
  * Contains fieldception.module.
  */
 
+use Drupal\Component\Utility\NestedArray;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Form\FormStateInterface;
+
 /**
  * Implements hook_theme().
  */
@@ -33,4 +37,12 @@ function fieldception_preprocess_field_multiple_value_form(&$variables) {
     unset($variables['table']['#tabledrag']);
     unset($variables['table']['#header'][1]);
   }
+}
+
+/**
+ * Implements hook_validation_constraint_alter().
+ */
+function fieldception_validation_constraint_alter(array &$definitions) {
+  // This constraint is required to test empty boolean values.
+  $definitions['NotEqualTo']['class'] = '\Symfony\Component\Validator\Constraints\NotEqualTo';
 }

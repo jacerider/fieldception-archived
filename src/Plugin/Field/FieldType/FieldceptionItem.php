@@ -156,12 +156,27 @@ class FieldceptionItem extends FieldItemBase {
         '#type' => 'textfield',
         '#title' => $this->t('Field label'),
         '#default_value' => $config['label'],
-        '#disabled' => $has_data,
         '#required' => TRUE,
       ];
 
       $element['_storage'][$subfield]['settings'] = [];
       $element['_storage'][$subfield]['settings'] = $subfield_storage->storageSettingsForm($element['_storage'][$subfield]['settings'], $form_state, $has_data);
+
+      // List validation has hardcoded database column names so we need to
+      // override the validation. This is only an issue when list fields
+      // check for changes in existing value lists.
+      if ($has_data && in_array($config['type'], ['list_string']) && isset($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'])) {
+        $has_validation = !empty(array_filter($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'], function ($callback) {
+          return isset($callback[1]) && $callback[1] === 'validateAllowedValues';
+        }));
+        if ($has_validation) {
+          $element['_storage'][$subfield]['settings']['allowed_values']['#field_has_data'] = FALSE;
+          $element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'][] = [
+            get_class($this),
+            'validateAllowedValuesWithData',
+          ];
+        }
+      }
       $count++;
     }
 
@@ -457,6 +472,50 @@ class FieldceptionItem extends FieldItemBase {
       $subfield_storage->setValue($subfield_values);
     }
     parent::setValue($values, $notify);
+  }
+
+  /**
+   * The #element_validate callback for options field allowed values.
+   *
+   * @param array $element
+   *   An associative array containing the properties and children of the
+   *   generic form element.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form for the form this element belongs to.
+   *
+   * @see \Drupal\Core\Render\Element\FormElement::processPattern()
+   */
+  public static function validateAllowedValuesWithData(array $element, FormStateInterface $form_state) {
+    $values = $form_state->getValue($element['#parents']);
+
+    // Prevent removing values currently in use.
+    $lost_keys = array_keys(array_diff_key($element['#allowed_values'], $values));
+    if (self::optionsValuesInUse($element['#entity_type'], $element['#field_name'], $lost_keys)) {
+      $form_state->setError($element, t('Allowed values list: some values are being removed while currently in use.'));
+    }
+  }
+
+  /**
+   * Checks if a list of values are being used in actual field values.
+   *
+   * This is a clone of Drupal core function _options_values_in_use that takes
+   * into account subfield keys.
+   */
+  protected static function optionsValuesInUse($entity_type, $field_name, $values) {
+    if ($values) {
+      $factory = \Drupal::service('entity.query');
+      $parts = explode(':', $field_name);
+      $result = $factory->get($entity_type)
+        ->condition($parts[0] . '.' . $parts[1] . '_value', $values, 'IN')
+        ->count()
+        ->accessCheck(FALSE)
+        ->range(0, 1)
+        ->execute();
+      if ($result) {
+        return TRUE;
+      }
+    }
+    return FALSE;
   }
 
 }

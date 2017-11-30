@@ -20,13 +20,6 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
   protected $key;
 
   /**
-   * The subfield.
-   *
-   * @var string
-   */
-  protected $subfield;
-
-  /**
    * Sets the definition key.
    *
    * This is used for caching.

@@ -53,10 +53,13 @@ class UnformattedList extends FieldceptionBase {
             $subfield_link_config = $field_settings['storage'][$subfield_link];
             $subfield_link_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $subfield_link_config, $subfield_link);
             $subfield_link_items = $fieldception_helper->getSubfieldItemList($subfield_link_definition, $entity, $delta);
-            $url = $this->buildUrl($subfield_link_items->first());
-            if ($url) {
-              $element[$delta][$subfield]['#tag'] = 'a';
-              $element[$delta][$subfield]['#attributes']['href'] = $url->toString();
+            $first = $subfield_link_items->first();
+            if (!$first->isEmpty()) {
+              $url = $this->buildUrl($first);
+              if ($url) {
+                $element[$delta][$subfield]['#tag'] = 'a';
+                $element[$delta][$subfield]['#attributes']['href'] = $url->toString();
+              }
             }
           }
         }

@@ -119,10 +119,6 @@ class FieldceptionWidget extends WidgetBase {
       ];
       $element['fields'][$subfield]['settings'] = [];
       $element['fields'][$subfield]['settings'] = $subfield_widget->settingsForm($element['fields'][$subfield]['settings'], $form_state);
-
-        ksm($element['fields'][$subfield]);
-      if (isset($element['fields'][$subfield]['settings']['link_to_entity'])) {
-      }
     }
 
     return $element;

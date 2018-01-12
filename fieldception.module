@@ -22,6 +22,7 @@ function fieldception_theme() {
       'attributes' => NULL,
       'title_attributes' => NULL,
       'content_attributes' => NULL,
+      'tag' => 'div',
     ],
     'file' => 'fieldception.theme.inc',
   ];

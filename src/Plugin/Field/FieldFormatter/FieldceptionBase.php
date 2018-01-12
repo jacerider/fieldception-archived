@@ -6,6 +6,7 @@ use Drupal\Core\Field\FormatterBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
+use Drupal\link\LinkItemInterface;
 
 /**
  * Base class for Double field formatters.
@@ -36,6 +37,12 @@ abstract class FieldceptionBase extends FormatterBase {
     $element['fields'] = [
       '#tree' => TRUE,
     ];
+    $link_field_options = [];
+    foreach ($field_settings['storage'] as $subfield => $config) {
+      if ($config['type'] === 'link') {
+        $link_field_options[$subfield] = $config['label'];
+      }
+    }
 
     foreach ($field_settings['storage'] as $subfield => $config) {
       $wrapper_id = Html::getId('fieldception-' . $field_name . '-' . $subfield);
@@ -53,17 +60,19 @@ abstract class FieldceptionBase extends FormatterBase {
         $subfield,
         'type',
       ]) ?: $this->getSubfieldFormatterType($subfield_definition);
-      $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
+
+      $is_hidden = $subfield_formatter_type === '_hidden';
 
       $element['fields'][$subfield] = [
         '#type' => 'fieldset',
         '#title' => $config['label'],
         '#tree' => TRUE,
+        '#id' => $wrapper_id,
       ];
       $element['fields'][$subfield]['type'] = [
         '#type' => 'select',
         '#title' => $this->t('Formatter'),
-        '#options' => $fieldception_helper->getFieldFormatterPluginManager()->getOptions($config['type']),
+        '#options' => ['_hidden' => '- Hidden -'] + $fieldception_helper->getFieldFormatterPluginManager()->getOptions($config['type']),
         '#default_value' => $subfield_formatter_type,
         '#required' => TRUE,
         '#ajax' => [
@@ -76,9 +85,26 @@ abstract class FieldceptionBase extends FormatterBase {
         '#title' => $this->t('Label display'),
         '#options' => $this->getFieldLabelOptions(),
         '#default_value' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
+        '#access' => !$is_hidden,
       ];
-      $element['fields'][$subfield]['settings'] = [];
-      $element['fields'][$subfield]['settings'] = $subfield_formatter->settingsForm($element['fields'][$subfield]['settings'], $form_state);
+
+      $element['fields'][$subfield]['settings'] = [
+        '#access' => !$is_hidden,
+      ];
+      if (!$is_hidden) {
+        $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
+        $element['fields'][$subfield]['settings'] = $subfield_formatter->settingsForm($element['fields'][$subfield]['settings'], $form_state);
+
+        if (!empty($link_field_options) && $config['type'] !== 'link' && isset($element['fields'][$subfield]['settings']['link_to_entity'])) {
+          $element['fields'][$subfield]['settings']['link_to_field'] = [
+            '#type' => 'select',
+            '#title' => $this->t('Link using a field'),
+            '#options' => ['' => $this->t('- None -')] + $link_field_options,
+            '#default_value' => !empty($subfield_settings['link_to_field']) ? $subfield_settings['link_to_field'] : '',
+          ];
+
+        }
+      }
     }
 
     return $element + parent::settingsForm($form, $form_state);
@@ -143,6 +169,35 @@ abstract class FieldceptionBase extends FormatterBase {
       return $settings['fields'][$subfield]['type'];
     }
     return \Drupal::service('fieldception.helper')->getSubfieldDefaultFormatter($subfield_definition);
+  }
+
+  /**
+   * Builds the \Drupal\Core\Url object for a link field item.
+   *
+   * @param \Drupal\link\LinkItemInterface $item
+   *   The link field item being rendered.
+   *
+   * @return \Drupal\Core\Url
+   *   A Url object.
+   */
+  protected function buildUrl(LinkItemInterface $item) {
+    $url = $item->getUrl() ?: Url::fromRoute('<none>');
+
+    $settings = $this->getSettings();
+    $options = $item->options;
+    $options += $url->getOptions();
+
+    // Add optional 'rel' attribute to link options.
+    if (!empty($settings['rel'])) {
+      $options['attributes']['rel'] = $settings['rel'];
+    }
+    // Add optional 'target' attribute to link options.
+    if (!empty($settings['target'])) {
+      $options['attributes']['target'] = $settings['target'];
+    }
+    $url->setOptions($options);
+
+    return $url;
   }
 
 }

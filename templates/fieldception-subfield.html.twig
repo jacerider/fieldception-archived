@@ -22,12 +22,12 @@
   ]
 %}
 {% if label_hidden %}
-  <div{{ attributes }}>
+  <{{ tag }}{{ attributes }}>
     {{ content }}
-  </div>
+  </{{ tag }}>
 {% else %}
-  <div{{ attributes.addClass(classes)  }}>
+  <{{ tag }}{{ attributes.addClass(classes)  }}>
     <div{{ title_attributes.addClass(title_classes) }}>{{ label }}</div>
     <div{{ content_attributes }}>{{ content }}</div>
-  </div>
+  </{{ tag }}>
 {% endif %}

@@ -11,7 +11,7 @@
 {%
   set classes = [
     'subfield',
-    subfield_name|replace({'field_':''})|clean_class,
+    field_name|replace({'field_':''})|clean_class,
     label_display != 'visually_hidden' and label_display != 'hidden' ? 'label-' ~ label_display|clean_class,
   ]
 %}
@@ -22,7 +22,7 @@
   ]
 %}
 {% if label_hidden %}
-  <{{ tag }}{{ attributes }}>
+  <{{ tag }}{{ attributes.addClass(classes) }}>
     {{ content }}
   </{{ tag }}>
 {% else %}

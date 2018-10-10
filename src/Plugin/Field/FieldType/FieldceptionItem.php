@@ -103,7 +103,7 @@ class FieldceptionItem extends FieldItemBase {
 
     $element = [];
     $storage = $form_state->get('fieldception_storage');
-    if (!count($storage)) {
+    if (!count((array) $storage)) {
       $storage = $settings['storage'];
       $form_state->set('fieldception_storage_current', $settings['storage']);
       $form_state->set('fieldception_storage_default', $settings['storage_default']);
@@ -360,7 +360,31 @@ class FieldceptionItem extends FieldItemBase {
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
 
-      foreach ($subfield_storage->getConstraints() as $subconstraint) {
+      $field_constraints = $subfield_storage->getConstraints();
+      if ($subfield_storage->getPluginId() == 'field_item:integer' && !$subfield_storage->getSetting('unsigned')) {
+        // Amazingly, Drupal 8 does not check max size on signed integer fields.
+        // @see https://www.drupal.org/project/drupal/issues/2722781
+        $label = $subfield_definition->getLabel();
+        list($min, $max) = $this->getRange($subfield_storage->getSetting('unsigned'), $subfield_storage->getSetting('size'));
+        $field_constraints[] = $constraint_manager->create('ComplexData', [
+          'value' => [
+            'Range' => [
+              'min' => $min,
+              'minMessage' => t('%name: the value may be no less than %min.', [
+                '%name' => $label,
+                '%min' => $min,
+              ]),
+              'max' => $max,
+              'maxMessage' => t('%name: the value may be no greater than %max.', [
+                '%name' => $label,
+                '%max' => $max,
+              ]),
+            ],
+          ],
+        ]);
+      }
+
+      foreach ($field_constraints as $subconstraint) {
         if (!isset($subconstraint->properties)) {
           continue;
         }
@@ -516,6 +540,33 @@ class FieldceptionItem extends FieldItemBase {
       }
     }
     return FALSE;
+  }
+
+  /**
+   * Calculate the range of numbers allowed for the given size and sign.
+   *
+   * @param bool $unsigned
+   *   TRUE if unsigned numbers expected.
+   * @param string $size
+   *   One of tiny, small, medium, normal or big.
+   *
+   * @return array
+   *   Array containing minimum and maximum that will fit the given size and
+   *   sign.
+   */
+  protected function getRange($unsigned, $size) {
+    $bytes = [
+      'tiny' => 1,
+      'small' => 2,
+      'medium' => 3,
+      'normal' => 4,
+      'big' => 8,
+    ];
+    $range = pow(2, $bytes[$size] * 8);
+    if ($unsigned) {
+      return [0, $range - 1];
+    }
+    return [-1 * ($range / 2), ($range / 2) - 1];
   }
 
 }

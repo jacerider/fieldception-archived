@@ -170,7 +170,6 @@ class FieldceptionWidget extends WidgetBase {
     switch ($cardinality) {
       case FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED:
         $field_state = static::getWidgetState($parents, $field_name, $form_state);
-        // $max = max(0, $field_state['items_count'] - 1);
         $max = $field_state['items_count'];
         $is_multiple = TRUE;
         break;
@@ -272,7 +271,7 @@ class FieldceptionWidget extends WidgetBase {
             '#type' => 'actions',
             'remove_button' => [
               '#delta' => $delta,
-              '#name' => implode('_', array_merge($elements[$delta]['#field_parents'], [$field_name, $delta])) . '_remove_button',
+              '#name' => strtr($id_prefix, '-', '_') . '_' . $delta . '_remove_button',
               '#type' => 'submit',
               '#value' => t('Remove item'),
               '#validate' => [],
@@ -283,8 +282,8 @@ class FieldceptionWidget extends WidgetBase {
               ],
               '#ajax' => [
                 'callback' => [$this, 'removeElementAjax'],
-                // 'effect' => 'fade',
                 'wrapper' => $elements['add_more']['#ajax']['wrapper'],
+                'effect' => 'fade',
               ],
             ],
           ];
@@ -360,7 +359,6 @@ class FieldceptionWidget extends WidgetBase {
    * by the form submission.
    */
   public static function removeElementAjax(array $form, FormStateInterface $form_state) {
-    // return;
     $button = $form_state->getTriggeringElement();
     return NestedArray::getValue($form, array_slice($button['#array_parents'], 0, -4));
   }
@@ -451,7 +449,6 @@ class FieldceptionWidget extends WidgetBase {
       }
     }
 
-
     return $element;
   }
 
@@ -493,6 +490,12 @@ class FieldceptionWidget extends WidgetBase {
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
         $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type);
+        if (!isset($value[$subfield]['value'])) {
+          // When form values are extracted from an entity they need to be
+          // adapted to our expected value.
+          $new_values[$delta] = $value;
+          continue;
+        }
 
         $subvalues = $subfield_widget->massageFormValues([$value[$subfield]['value']], $form, $form_state);
         $subvalues = reset($subvalues);

@@ -35,6 +35,9 @@ class UnformattedList extends FieldceptionBase {
         $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_formatter_type = $this->getSubfieldFormatterType($subfield_definition);
+        if ($subfield_formatter_type === '_hidden') {
+          continue;
+        }
         $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
         $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
         if (!$subfield_items->isEmpty()) {
@@ -45,6 +48,20 @@ class UnformattedList extends FieldceptionBase {
             '#label_display' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
             '#content' => $subfield_formatter->viewElements($subfield_items, $langcode),
           ];
+          if (!empty($subfield_settings['link_to_field']) && isset($field_settings['storage'][$subfield_settings['link_to_field']])) {
+            $subfield_link = $subfield_settings['link_to_field'];
+            $subfield_link_config = $field_settings['storage'][$subfield_link];
+            $subfield_link_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $subfield_link_config, $subfield_link);
+            $subfield_link_items = $fieldception_helper->getSubfieldItemList($subfield_link_definition, $entity, $delta);
+            $first = $subfield_link_items->first();
+            if (!$first->isEmpty()) {
+              $url = $this->buildUrl($first);
+              if ($url) {
+                $element[$delta][$subfield]['#tag'] = 'a';
+                $element[$delta][$subfield]['#attributes']['href'] = $url->toString();
+              }
+            }
+          }
         }
       }
     }

@@ -103,7 +103,7 @@ class FieldceptionItem extends FieldItemBase {
 
     $element = [];
     $storage = $form_state->get('fieldception_storage');
-    if (!count($storage)) {
+    if (!count((array) $storage)) {
       $storage = $settings['storage'];
       $form_state->set('fieldception_storage_current', $settings['storage']);
       $form_state->set('fieldception_storage_default', $settings['storage_default']);
@@ -156,12 +156,27 @@ class FieldceptionItem extends FieldItemBase {
         '#type' => 'textfield',
         '#title' => $this->t('Field label'),
         '#default_value' => $config['label'],
-        '#disabled' => $has_data,
         '#required' => TRUE,
       ];
 
       $element['_storage'][$subfield]['settings'] = [];
       $element['_storage'][$subfield]['settings'] = $subfield_storage->storageSettingsForm($element['_storage'][$subfield]['settings'], $form_state, $has_data);
+
+      // List validation has hardcoded database column names so we need to
+      // override the validation. This is only an issue when list fields
+      // check for changes in existing value lists.
+      if ($has_data && in_array($config['type'], ['list_string']) && isset($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'])) {
+        $has_validation = !empty(array_filter($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'], function ($callback) {
+          return isset($callback[1]) && $callback[1] === 'validateAllowedValues';
+        }));
+        if ($has_validation) {
+          $element['_storage'][$subfield]['settings']['allowed_values']['#field_has_data'] = FALSE;
+          $element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'][] = [
+            get_class($this),
+            'validateAllowedValuesWithData',
+          ];
+        }
+      }
       $count++;
     }
 
@@ -345,7 +360,31 @@ class FieldceptionItem extends FieldItemBase {
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
 
-      foreach ($subfield_storage->getConstraints() as $subconstraint) {
+      $field_constraints = $subfield_storage->getConstraints();
+      if ($subfield_storage->getPluginId() == 'field_item:integer' && !$subfield_storage->getSetting('unsigned')) {
+        // Amazingly, Drupal 8 does not check max size on signed integer fields.
+        // @see https://www.drupal.org/project/drupal/issues/2722781
+        $label = $subfield_definition->getLabel();
+        list($min, $max) = $this->getRange($subfield_storage->getSetting('unsigned'), $subfield_storage->getSetting('size'));
+        $field_constraints[] = $constraint_manager->create('ComplexData', [
+          'value' => [
+            'Range' => [
+              'min' => $min,
+              'minMessage' => t('%name: the value may be no less than %min.', [
+                '%name' => $label,
+                '%min' => $min,
+              ]),
+              'max' => $max,
+              'maxMessage' => t('%name: the value may be no greater than %max.', [
+                '%name' => $label,
+                '%max' => $max,
+              ]),
+            ],
+          ],
+        ]);
+      }
+
+      foreach ($field_constraints as $subconstraint) {
         if (!isset($subconstraint->properties)) {
           continue;
         }
@@ -457,6 +496,77 @@ class FieldceptionItem extends FieldItemBase {
       $subfield_storage->setValue($subfield_values);
     }
     parent::setValue($values, $notify);
+  }
+
+  /**
+   * The #element_validate callback for options field allowed values.
+   *
+   * @param array $element
+   *   An associative array containing the properties and children of the
+   *   generic form element.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form for the form this element belongs to.
+   *
+   * @see \Drupal\Core\Render\Element\FormElement::processPattern()
+   */
+  public static function validateAllowedValuesWithData(array $element, FormStateInterface $form_state) {
+    $values = $form_state->getValue($element['#parents']);
+
+    // Prevent removing values currently in use.
+    $lost_keys = array_keys(array_diff_key($element['#allowed_values'], $values));
+    if (self::optionsValuesInUse($element['#entity_type'], $element['#field_name'], $lost_keys)) {
+      $form_state->setError($element, t('Allowed values list: some values are being removed while currently in use.'));
+    }
+  }
+
+  /**
+   * Checks if a list of values are being used in actual field values.
+   *
+   * This is a clone of Drupal core function _options_values_in_use that takes
+   * into account subfield keys.
+   */
+  protected static function optionsValuesInUse($entity_type, $field_name, $values) {
+    if ($values) {
+      $factory = \Drupal::service('entity.query');
+      $parts = explode(':', $field_name);
+      $result = $factory->get($entity_type)
+        ->condition($parts[0] . '.' . $parts[1] . '_value', $values, 'IN')
+        ->count()
+        ->accessCheck(FALSE)
+        ->range(0, 1)
+        ->execute();
+      if ($result) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Calculate the range of numbers allowed for the given size and sign.
+   *
+   * @param bool $unsigned
+   *   TRUE if unsigned numbers expected.
+   * @param string $size
+   *   One of tiny, small, medium, normal or big.
+   *
+   * @return array
+   *   Array containing minimum and maximum that will fit the given size and
+   *   sign.
+   */
+  protected function getRange($unsigned, $size) {
+    $bytes = [
+      'tiny' => 1,
+      'small' => 2,
+      'medium' => 3,
+      'normal' => 4,
+      'big' => 8,
+    ];
+    $range = pow(2, $bytes[$size] * 8);
+    if ($unsigned) {
+      return [0, $range - 1];
+    }
+    return [-1 * ($range / 2), ($range / 2) - 1];
   }
 
 }

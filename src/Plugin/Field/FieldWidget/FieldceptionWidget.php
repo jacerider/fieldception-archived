@@ -3,6 +3,8 @@
 namespace Drupal\fieldception\Plugin\Field\FieldWidget;
 
 use Drupal\Core\Field\WidgetBase;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\Field\FieldFilteredMarkup;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
@@ -159,27 +161,132 @@ class FieldceptionWidget extends WidgetBase {
    * {@inheritdoc}
    */
   protected function formMultipleElements(FieldItemListInterface $items, array &$form, FormStateInterface $form_state) {
-    $elements = parent::formMultipleElements($items, $form, $form_state);
+    $field_name = $this->fieldDefinition->getName();
     $settings = $this->getSettings();
     $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
-    $is_multiple = $cardinality !== 1;
+    $parents = $form['#parents'];
 
-    foreach (Element::children($elements) as $delta) {
-      $elements[$delta] = $this->formElementRemoveTitle($elements[$delta], $delta);
+    // Determine the number of widgets to display.
+    switch ($cardinality) {
+      case FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED:
+        $field_state = static::getWidgetState($parents, $field_name, $form_state);
+        $max = $field_state['items_count'];
+        $is_multiple = TRUE;
+        break;
+
+      default:
+        $max = $cardinality - 1;
+        $is_multiple = ($cardinality > 1);
+        break;
+    }
+
+    $title = $this->fieldDefinition->getLabel();
+    $description = FieldFilteredMarkup::create(\Drupal::token()->replace($this->fieldDefinition->getDescription()));
+
+    $elements = [];
+
+    for ($delta = 0; $delta <= $max; $delta++) {
+      // Add a new empty item if it doesn't exist yet at this delta.
+      if (!isset($items[$delta])) {
+        $items->appendItem();
+      }
+
+      // For multiple fields, title and description are handled by the wrapping
+      // table.
+      if ($is_multiple) {
+        $element = [
+          '#title' => $this->t('@title (value @number)', ['@title' => $title, '@number' => $delta + 1]),
+          '#title_display' => 'invisible',
+          '#description' => '',
+        ];
+      }
+      else {
+        $element = [
+          '#title' => $title,
+          '#title_display' => 'before',
+          '#description' => $description,
+        ];
+      }
+
+      $element = $this->formSingleElement($items, $delta, $element, $form, $form_state);
+
+      if ($element) {
+        // Input field for the delta (drag-n-drop reordering).
+        if ($is_multiple) {
+          $elements['#fieldception_drag'] = $settings['draggable'];
+          if ($settings['draggable']) {
+            // We name the element '_weight' to avoid clashing with elements
+            // defined by widget.
+            $element['_weight'] = [
+              '#type' => 'weight',
+              '#title' => $this->t('Weight for row @number', ['@number' => $delta + 1]),
+              '#title_display' => 'invisible',
+              '#delta' => $max,
+              '#default_value' => $items[$delta]->_weight ?: $delta,
+              '#weight' => 100,
+            ];
+          }
+        }
+
+        $elements[$delta] = $element;
+      }
     }
 
     if ($elements) {
-      if (isset($elements['add_more'])) {
-        $elements['add_more']['#value'] = $settings['more_label'];
-      }
+      $elements += [
+        '#theme' => 'field_multiple_value_form',
+        '#field_name' => $field_name,
+        '#cardinality' => $cardinality,
+        '#cardinality_multiple' => $this->fieldDefinition->getFieldStorageDefinition()->isMultiple(),
+        '#required' => $this->fieldDefinition->isRequired(),
+        '#title' => $title,
+        '#description' => $description,
+        '#max_delta' => $max,
+      ];
 
-      if ($is_multiple) {
-        $elements['#fieldception_drag'] = $settings['draggable'];
-        if (empty($settings['draggable'])) {
-          foreach (Element::children($elements) as $delta) {
-            $element = &$elements[$delta];
-            unset($element['_weight']);
-          }
+      // Add 'add more' button, if not working with a programmed form.
+      if ($cardinality == FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED && !$form_state->isProgrammed()) {
+        $id_prefix = implode('-', array_merge($parents, [$field_name]));
+        $wrapper_id = Html::getUniqueId($id_prefix . '-add-more-wrapper');
+        $elements['#prefix'] = '<div id="' . $wrapper_id . '">';
+        $elements['#suffix'] = '</div>';
+
+        $elements['add_more'] = [
+          '#type' => 'submit',
+          '#name' => strtr($id_prefix, '-', '_') . '_add_more',
+          '#value' => $settings['more_label'],
+          '#attributes' => ['class' => ['field-add-more-submit']],
+          '#limit_validation_errors' => [array_merge($parents, [$field_name])],
+          '#submit' => [[get_class($this), 'addMoreSubmit']],
+          '#ajax' => [
+            'callback' => [get_class($this), 'addMoreAjax'],
+            'wrapper' => $wrapper_id,
+            'effect' => 'fade',
+          ],
+        ];
+
+        for ($delta = 0; $delta <= $max; $delta++) {
+          $elements[$delta] = $this->formElementRemoveTitle($elements[$delta], $delta);
+          $elements[$delta]['actions'] = [
+            '#type' => 'actions',
+            'remove_button' => [
+              '#delta' => $delta,
+              '#name' => strtr($id_prefix, '-', '_') . '_' . $delta . '_remove_button',
+              '#type' => 'submit',
+              '#value' => t('Remove item'),
+              '#validate' => [],
+              '#submit' => [[$this, 'removeElementSubmit']],
+              '#limit_validation_errors' => [],
+              '#attributes' => [
+                'class' => ['secondary', 'close'],
+              ],
+              '#ajax' => [
+                'callback' => [$this, 'removeElementAjax'],
+                'wrapper' => $elements['add_more']['#ajax']['wrapper'],
+                'effect' => 'fade',
+              ],
+            ],
+          ];
         }
       }
 
@@ -195,6 +302,65 @@ class FieldceptionWidget extends WidgetBase {
     }
 
     return $elements;
+  }
+
+  /**
+   * Submission handler for the "remove item" button.
+   */
+  public static function removeElementSubmit(array $form, FormStateInterface $form_state) {
+    $button = $form_state->getTriggeringElement();
+    $delta = $button['#delta'];
+    $array_parents = array_slice($button['#array_parents'], 0, -4);
+    $old_parents = array_slice($button['#parents'], 0, -3);
+    $parent_element = NestedArray::getValue($form, array_merge($array_parents, ['widget']));
+    $field_name = $parent_element['#field_name'];
+    $parents = $parent_element['#field_parents'];
+    $field_state = static::getWidgetState($parents, $field_name, $form_state);
+    for ($i = $delta; $i < $field_state['items_count']; $i++) {
+      $old_element_widget_parents = array_merge($array_parents, ['widget', $i + 1]);
+      $old_element_parents = array_merge($old_parents, [$i + 1]);
+      $new_element_parents = array_merge($old_parents, [$i]);
+      $moving_element = NestedArray::getValue($form, $old_element_widget_parents);
+      $moving_element_input = NestedArray::getValue($form_state->getUserInput(), $old_element_parents);
+
+      // Tell the element where it's being moved to.
+      $moving_element['#parents'] = $new_element_parents;
+
+      // Move the element around.
+      $user_input = $form_state->getUserInput();
+      NestedArray::setValue($user_input, $moving_element['#parents'], $moving_element_input);
+      $user_input[$field_name] = array_filter($user_input[$field_name]);
+      $form_state->setUserInput($user_input);
+    }
+    unset($parent_element[$delta]);
+    NestedArray::setValue($form, $array_parents, $parent_element);
+
+    if ($field_state['items_count'] > 0) {
+      $field_state['items_count']--;
+    }
+    $input = NestedArray::getValue($form_state->getUserInput(), $array_parents);
+    $weight = -1 * $field_state['items_count'];
+    foreach ($input as $key => $item) {
+      if ($item) {
+        $input[$key]['_weight'] = $weight++;
+      }
+    }
+    $user_input = $form_state->getUserInput();
+    NestedArray::setValue($user_input, $array_parents, $input);
+    $form_state->setUserInput($user_input);
+    static::setWidgetState($parents, $field_name, $form_state, $field_state);
+    $form_state->setRebuild();
+  }
+
+  /**
+   * Ajax callback for the "remove item" button.
+   *
+   * This returns the new page content to replace the page content made obsolete
+   * by the form submission.
+   */
+  public static function removeElementAjax(array $form, FormStateInterface $form_state) {
+    $button = $form_state->getTriggeringElement();
+    return NestedArray::getValue($form, array_slice($button['#array_parents'], 0, -4));
   }
 
   /**
@@ -222,7 +388,9 @@ class FieldceptionWidget extends WidgetBase {
     $field_settings = $this->getFieldSettings();
     $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
     $entity = $items->getEntity();
+    $field_name = $this->fieldDefinition->getName();
     $cardinality = $this->fieldDefinition->getFieldStorageDefinition()->getCardinality();
+    $parents = $form['#parents'];
 
     $element['#type'] = $cardinality === 1 ? 'fieldset' : 'container';
     $element['#attributes']['class'][] = $cardinality === 1 ? 'fieldception-single' : 'fieldception-multiple';
@@ -263,8 +431,15 @@ class FieldceptionWidget extends WidgetBase {
         '#title_lock' => TRUE,
       ];
 
-      $element['group_' . $group][$subfield]['value'] = $subfield_widget->formElement($subfield_items, 0, $element['group_' . $group][$subfield]['value'], $form, $form_state);
+      $element['group_' . $group][$subfield]['value'] = $subfield_widget->formElement(
+        $subfield_items,
+        0,
+        $element['group_' . $group][$subfield]['value'],
+        $form,
+        $form_state
+      );
 
+      $element['#group_count'] = $group;
       if ($fields_per_row && $count >= $fields_per_row) {
         $count = 1;
         $group++;
@@ -315,6 +490,12 @@ class FieldceptionWidget extends WidgetBase {
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
         $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type);
+        if (!isset($value[$subfield]['value'])) {
+          // When form values are extracted from an entity they need to be
+          // adapted to our expected value.
+          $new_values[$delta] = $value;
+          continue;
+        }
 
         $subvalues = $subfield_widget->massageFormValues([$value[$subfield]['value']], $form, $form_state);
         $subvalues = reset($subvalues);

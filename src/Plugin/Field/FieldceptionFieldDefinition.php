@@ -6,11 +6,12 @@ use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\OptionsProviderInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
 
 /**
  * A class for defining entity fields.
  */
-class FieldceptionFieldDefinition extends BaseFieldDefinition {
+class FieldceptionFieldDefinition extends BaseFieldDefinition implements ThirdPartySettingsInterface {
 
   /**
    * The subfield key.
@@ -18,6 +19,15 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    * @var string
    */
   protected $key;
+
+  /**
+   * Third party entity settings.
+   *
+   * An array of key/value pairs keyed by provider.
+   *
+   * @var array
+   */
+  protected $thirdPartySettings = [];
 
   /**
    * Sets the definition key.
@@ -53,7 +63,7 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    */
   public function getSubfield() {
     $parts = explode(':', $this->getName());
-    return $parts[1];
+    return isset($parts[1]) ? $parts[1] : $parts[0];
   }
 
   /**
@@ -88,6 +98,53 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function setThirdPartySetting($module, $key, $value) {
+    $this->thirdPartySettings[$module][$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySetting($module, $key, $default = NULL) {
+    if (isset($this->thirdPartySettings[$module][$key])) {
+      return $this->thirdPartySettings[$module][$key];
+    }
+    else {
+      return $default;
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySettings($module) {
+    return isset($this->thirdPartySettings[$module]) ? $this->thirdPartySettings[$module] : [];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function unsetThirdPartySetting($module, $key) {
+    unset($this->thirdPartySettings[$module][$key]);
+    // If the third party is no longer storing any information, completely
+    // remove the array holding the settings for this module.
+    if (empty($this->thirdPartySettings[$module])) {
+      unset($this->thirdPartySettings[$module]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartyProviders() {
+    return array_keys($this->thirdPartySettings);
+  }
+
+  /**
    * Creates a new field definition based upon a field storage definition.
    *
    * In cases where one needs a field storage definitions to act like full
@@ -112,7 +169,7 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
     // FieldceptionHelper->getSubfieldItemList() will convert this back to
     // the actual field name.
     $name = $definition->getName() . ':' . $subfield;
-    return static::create($config['type'])
+    $storage = static::create($config['type'])
       // Subfields only support single values.
       ->setCardinality(1)
       ->setConstraints($definition->getConstraints())
@@ -125,7 +182,9 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
       ->setRevisionable($definition->isRevisionable())
       ->setSettings($config['settings'])
       ->setTargetEntityTypeId($definition->getTargetEntityTypeId())
+      // ->setTargetBundle($definition->getTargetBundle())
       ->setTranslatable($definition->isTranslatable());
+    return $storage;
   }
 
   /**

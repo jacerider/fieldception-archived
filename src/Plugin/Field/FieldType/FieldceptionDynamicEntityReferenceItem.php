@@ -2,32 +2,34 @@
 
 namespace Drupal\fieldception\Plugin\Field\FieldType;
 
-use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
+use Drupal\dynamic_entity_reference\Plugin\Field\FieldType\DynamicEntityReferenceItem;
 use Drupal\Core\Form\FormStateInterface;
 
 /**
  * Plugin implementation of the 'fieldception' field type.
  *
  * @FieldType(
- *   id = "fieldception_entity_reference",
+ *   id = "fieldception_dynamic_entity_reference",
  *   label = @Translation("Fieldception entity reference"),
- *   description = @Translation("An entity field containing an entity reference."),
- *   category = @Translation("Reference"),
- *   default_widget = "entity_reference_autocomplete",
- *   default_formatter = "entity_reference_label",
- *   list_class = "\Drupal\Core\Field\EntityReferenceFieldItemList",
+ *   description = @Translation("An entity field containing a dynamic entity reference."),
+ *   category = @Translation("Dynamic Reference"),
+ *   list_class = "\Drupal\dynamic_entity_reference\Plugin\Field\FieldType\DynamicEntityReferenceFieldItemList",
+ *   default_widget = "dynamic_entity_reference_default",
+ *   default_formatter = "dynamic_entity_reference_label",
  *   no_ui = TRUE,
  * )
  */
-class FieldceptionEntityReferenceItem extends EntityReferenceItem {
+class FieldceptionDynamicEntityReferenceItem extends DynamicEntityReferenceItem {
 
   /**
    * {@inheritdoc}
    */
-  public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
-    $elements = parent::fieldSettingsForm($form, $form_state);
-    unset($elements['handler']['handler']['#limit_validation_errors']);
-    return $elements;
+  public function setValue($values, $notify = TRUE) {
+    // An error occures when $values is empty. May have side effects.
+    if (empty($values)) {
+      return;
+    }
+    parent::setValue($values, $notify);
   }
 
   /**

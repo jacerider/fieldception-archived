@@ -11,11 +11,21 @@ use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Field\FieldConfigInterface;
+use Drupal\Core\Field\EntityReferenceFieldItemList;
 
 /**
  * Class FieldceptionHelper.
  */
 class FieldceptionHelper {
+
+  /**
+   * The entity type manager.
+   *
+   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
+   */
+  protected $entityTypeManager;
 
   /**
    * The field type plugin manager.
@@ -46,7 +56,21 @@ class FieldceptionHelper {
   protected $subfieldDefinitions = [];
 
   /**
-   * Static cache of storage.
+   * Static cache of storage configs.
+   *
+   * @var array
+   */
+  protected $subfieldStorageConfigs = [];
+
+  /**
+   * Static cache of configs.
+   *
+   * @var array
+   */
+  protected $subfieldConfigs = [];
+
+  /**
+   * Static cache of storages.
    *
    * @var array
    */
@@ -76,7 +100,8 @@ class FieldceptionHelper {
   /**
    * Constructs a new FieldceptionHelper object.
    */
-  public function __construct(FieldTypePluginManagerInterface $field_type_plugin_manager, WidgetPluginManager $field_widget_plugin_manager, DefaultPluginManager $field_formatter_plugin_manager) {
+  public function __construct(EntityTypeManagerInterface $entity_type_manager, FieldTypePluginManagerInterface $field_type_plugin_manager, WidgetPluginManager $field_widget_plugin_manager, DefaultPluginManager $field_formatter_plugin_manager) {
+    $this->entityTypeManager = $entity_type_manager;
     $this->fieldTypePluginManager = $field_type_plugin_manager;
     $this->fieldWidgetPluginManager = $field_widget_plugin_manager;
     $this->fieldFormatterPluginManager = $field_formatter_plugin_manager;
@@ -96,25 +121,31 @@ class FieldceptionHelper {
     ksort($value);
     foreach ($value as $i => $v) {
       if ($v instanceof FieldItemListInterface) {
-        if (!$v->isEmpty()) {
-          $v = $v->first()->getValue();
+        $v = $v->first();
+        if ($v) {
+          $v = $v->getValue();
         }
         else {
           $v = 'e';
         }
       }
       if (is_array($v)) {
-        $v = $this->toKey($v);
+        $v = hash('md5', json_encode($v));
+        // $v = 1;
+        // $v = $this->toKey($v);
       }
       if ($v instanceof FieldceptionFieldDefinition) {
         $v = $v->getKey();
+      }
+      if ($v instanceof FieldConfigInterface) {
+        $v = $v->id();
       }
       if ($v instanceof FieldStorageDefinitionInterface) {
         $v = $v->getName();
       }
       if ($v instanceof ContentEntityInterface) {
         $i = 'entity';
-        $v = $v->id();
+        $v = $v->getEntityTypeId() . '--' . $v->id() . '--' . $v->getRevisionId();
       }
       if (empty($v) && $v !== 0) {
         $v = '0';
@@ -127,7 +158,7 @@ class FieldceptionHelper {
   }
 
   /**
-   * Prepare config.$_COOKIE
+   * Prepare config.$_COOKIE.
    *
    * Supports preconfigured fields.
    *
@@ -172,7 +203,7 @@ class FieldceptionHelper {
    * @param string $subfield
    *   The subfield name.
    *
-   * @return Drupal\Core\Field\FieldDefinitionInterface
+   * @return \Drupal\Core\Field\FieldDefinitionInterface
    *   A subfield definition.
    */
   public function getSubfieldDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
@@ -187,6 +218,29 @@ class FieldceptionHelper {
         ->setKey($key);
     }
     return $this->subfieldDefinitions[$key];
+  }
+
+  /**
+   * Get subfield storage config entity.
+   *
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
+   *
+   * @return \Drupal\field\FieldStorageConfigInterface
+   *   The field storage config entity.
+   */
+  public function getSubfieldStorageConfig(FieldDefinitionInterface $subfield_definition) {
+    $key = $this->toKey([
+      $subfield_definition,
+    ]);
+    if (!isset($this->subfieldStorageConfigs[$key])) {
+      $this->subfieldStorageConfigs[$key] = $this->entityTypeManager->getStorage('field_storage_config')->create([
+        'field_name' => $subfield_definition->getSubfield(),
+        'entity_type' => $subfield_definition->getTargetEntityTypeId(),
+        'type' => $subfield_definition->getType(),
+      ]);
+    }
+    return $this->subfieldStorageConfigs[$key];
   }
 
   /**
@@ -213,8 +267,11 @@ class FieldceptionHelper {
         'parent' => $subfield_item_list,
       ]);
 
-      if ($subfield_item_list && !$subfield_item_list->isEmpty()) {
-        $storage->setValue($subfield_item_list->first()->getValue());
+      if ($subfield_item_list) {
+        $item = $subfield_item_list->first();
+        if ($item) {
+          $storage->setValue($item->getValue());
+        }
       }
       $this->subfieldStorage[$key] = $storage;
     }
@@ -316,6 +373,43 @@ class FieldceptionHelper {
   }
 
   /**
+   * Get subfield config entity.
+   *
+   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   *   The subfield definition.
+   * @param Drupal\Core\Field\FieldConfigInterface $field_config
+   *   The base field config.
+   *
+   * @return \Drupal\field\FieldConfigInterface
+   *   The field config entity.
+   */
+  public function getSubfieldConfig(FieldDefinitionInterface $subfield_definition, FieldConfigInterface $field_config) {
+    $key = $this->toKey([
+      $subfield_definition,
+      $field_config,
+    ]);
+    if (!isset($this->subfieldConfigs[$key])) {
+      $this->subfieldConfigs[$key] = $this->entityTypeManager->getStorage('field_config')->create([
+        'field_name' => $subfield_definition->getParentfield(),
+        'entity_type' => $subfield_definition->getTargetEntityTypeId(),
+        'label' => $subfield_definition->getLabel(),
+        'bundle' => $field_config->getTargetBundle(),
+      ]);
+      $this->subfieldConfigs[$key]
+        ->set('field_name', $subfield_definition->getName())
+        ->setLabel($subfield_definition->getLabel())
+        ->setSettings($subfield_definition->getSettings())
+        ->set('field_type', $subfield_definition->getType());
+      foreach ($field_config->getThirdPartyProviders() as $provider) {
+        foreach ($field_config->getThirdPartySettings($provider) as $id => $value) {
+          $this->subfieldConfigs[$key]->setThirdPartySetting($provider, $key, $value);
+        }
+      }
+    }
+    return $this->subfieldConfigs[$key];
+  }
+
+  /**
    * Get subfield item list.
    *
    * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
@@ -324,32 +418,62 @@ class FieldceptionHelper {
    *   The parent entity.
    * @param int $delta
    *   The parent entity value delta.
-   * @param array $values
+   * @param string|array $values
    *   An array of values to set to the item list. If none is supplied the
-   *   entity value will be used.
+   *   entity value will be used. If not an array, it can be used to generate
+   *   a new cache entry.
    *
    * @return \Drupal\Core\Field\FieldItemListInterface
    *   The field item list.
    */
-  public function getSubfieldItemList(FieldDefinitionInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0, array $values = NULL) {
+  public function getSubfieldItemList(FieldDefinitionInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0, $values = NULL) {
     $key = $this->toKey([
       $subfield_definition,
       $entity,
+      !empty($entity->original),
       $delta,
       $values,
     ]);
     if (!isset($this->subfieldItemLists[$key])) {
+      $entity = clone $entity;
       $field_name = $subfield_definition->getParentfield();
-      $subfield = $subfield_definition->getSubfield();
+      $langcode = $entity->language()->getId();
+
+      // Merge in third party settings.
+      $field_config = $entity->get($field_name)->getFieldDefinition();
+      foreach ($field_config->getThirdPartyProviders() as $provider) {
+        foreach ($field_config->getThirdPartySettings($provider) as $id => $value) {
+          $subfield_definition->setThirdPartySetting($provider, $id, $value);
+        }
+      }
 
       $subfield_list_class = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType())['list_class'];
-      $field_item_list = $subfield_list_class::createInstance($subfield_definition->getFieldStorageDefinition(), $subfield_definition->getName(), $entity->getTypedData());
+      $field_item_list = $subfield_list_class::createInstance($subfield_definition, $subfield_definition->getName(), $entity->getTypedData());
+      $field_item_list->setLangcode($langcode);
 
       // Convert values to subvalues.
-      $values = is_array($values) ? $values : $entity->get($field_name)->get($delta)->toArray();
+      if (!is_array($values)) {
+        $field = $entity->get($field_name);
+        if (!$field->get($delta)) {
+          $values = [];
+        }
+        else {
+          $values = $field->get($delta)->toArray();
+        }
+      }
       $value = $this->convertValueToSubfieldValue($subfield_definition, $values);
       $value = !empty($value) ? $value : '';
+      if ($value == '' && $field_item_list instanceof EntityReferenceFieldItemList) {
+        $value = ['target_id' => NULL];
+      }
       $field_item_list->setValue($value);
+      $entity->{$subfield_definition->getName()} = $field_item_list;
+
+      if (!empty($entity->original)) {
+        $entity->original = clone $entity->original;
+        $entity->original->{$subfield_definition->getName()} = $this->getSubfieldItemList($subfield_definition, $entity->original, $delta, 'original');
+      }
+
       $this->subfieldItemLists[$key] = $field_item_list;
     }
 
@@ -368,14 +492,16 @@ class FieldceptionHelper {
    *   An array containing the subfield value.
    */
   public function convertValueToSubfieldValue(FieldDefinitionInterface $subfield_definition, array $value) {
-    $subfield = $subfield_definition->getSubfield();
-    $subfield_storage = $this->getSubfieldStorage($subfield_definition);
     $subfield_value = [];
-    $schema = $subfield_storage::schema($subfield_definition);
-    foreach ($schema['columns'] as $column_name => $column) {
-      $parent_column_name = $subfield . '_' . $column_name;
-      if (isset($value[$parent_column_name])) {
-        $subfield_value[$column_name] = $value[$parent_column_name];
+    if (!empty($value)) {
+      $subfield = $subfield_definition->getSubfield();
+      $subfield_storage = $this->getSubfieldStorage($subfield_definition);
+      $schema = $subfield_storage::schema($subfield_definition);
+      foreach ($schema['columns'] as $column_name => $column) {
+        $parent_column_name = $subfield . '_' . $column_name;
+        if (array_key_exists($parent_column_name, $value)) {
+          $subfield_value[$column_name] = $value[$parent_column_name];
+        }
       }
     }
     return $subfield_value;

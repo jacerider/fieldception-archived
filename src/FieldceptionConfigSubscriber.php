@@ -44,7 +44,7 @@ class FieldceptionConfigSubscriber implements EventSubscriberInterface {
           $tables = [
             $entity->getTargetEntityTypeId() . '__' . $entity->getName() => [],
           ];
-          if ($entity->isRevisionable()) {
+          if ($entity->isRevisionable() && $database->schema()->tableExists($entity->getTargetEntityTypeId() . '_revision__' . $entity->getName())) {
             $tables[$entity->getTargetEntityTypeId() . '_revision__' . $entity->getName()] = [];
           }
           foreach ($tables as $table => $values) {

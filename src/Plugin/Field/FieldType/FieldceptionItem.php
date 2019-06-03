@@ -503,7 +503,7 @@ class FieldceptionItem extends FieldItemBase {
       $tables = [
         $entity->getTargetEntityTypeId() . '__' . $entity->getName() => [],
       ];
-      if ($entity->isRevisionable()) {
+      if ($entity->isRevisionable() && $database->schema()->tableExists($entity->getTargetEntityTypeId() . '_revision__' . $entity->getName())) {
         $tables[$entity->getTargetEntityTypeId() . '_revision__' . $entity->getName()] = [];
       }
       foreach ($tables as $table => $values) {
@@ -611,6 +611,7 @@ class FieldceptionItem extends FieldItemBase {
         $this->t('ID'),
         $this->t('Type'),
         $this->t('Required'),
+        $this->t('Operations'),
       ],
       '#prefix' => '<div id="fieldception-fields">',
       '#suffix' => '</div>',

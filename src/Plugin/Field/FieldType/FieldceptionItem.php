@@ -96,7 +96,6 @@ class FieldceptionItem extends FieldItemBase {
       // Merge into storage settings.
       $settings['storage'][$subfield]['settings'] = $settings['fields'][$subfield]['settings'] + $settings['storage'][$subfield]['settings'];
     }
-    $settings['poo'] = 'asdf';
     return $settings;
   }
 

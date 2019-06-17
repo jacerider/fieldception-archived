@@ -63,6 +63,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
   public static function defaultWidgetSettings() {
     return [
       'label_display' => 'above',
+      'link_to_field' => '',
       'settings' => [],
     ];
   }
@@ -110,17 +111,32 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
       $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
       $subfield_formatter_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
       $element['fields'][$subfield] = $this->settingsFormField($subfield, $config, $subfield_settings, $form_state);
-      if ($element['fields'][$subfield]['settings']['#access'] && !empty($link_field_options) && $config['type'] !== 'link' && isset($element['settings']['link_to_entity'])) {
-        $element['fields'][$subfield]['settings']['link_to_field'] = [
+      if ($element['fields'][$subfield]['settings']['#access'] && !empty($link_field_options) && $config['type'] !== 'link') {
+        $element['fields'][$subfield]['link_to_field'] = [
           '#type' => 'select',
           '#title' => $this->t('Link using a field'),
           '#options' => ['' => $this->t('- None -')] + $link_field_options,
           '#default_value' => !empty($subfield_formatter_settings['link_to_field']) ? $subfield_formatter_settings['link_to_field'] : '',
+          '#weight' => -10,
         ];
       }
     }
 
     return $element + parent::settingsForm($form, $form_state);
+  }
+
+  /**
+   * Get possible link fields.
+   */
+  protected function getLinkFieldOptions() {
+    $field_settings = $this->getFieldSettings();
+    $link_field_options = [];
+    foreach ($field_settings['storage'] as $subfield => $config) {
+      if ($config['type'] === 'link') {
+        $link_field_options[$subfield] = $config['label'];
+      }
+    }
+    return $link_field_options;
   }
 
   /**
@@ -157,6 +173,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
       '#options' => ['_hidden' => '- Hidden -'] + $this->fieldceptionHelper->getFieldFormatterPluginManager()->getOptions($config['type']),
       '#default_value' => $subfield_formatter_type,
       '#required' => TRUE,
+      '#weight' => -10,
       '#ajax' => [
         'callback' => [get_class($this), 'settingsFormAjax'],
         'wrapper' => $wrapper_id,
@@ -168,6 +185,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
       '#options' => $this->getFieldLabelOptions(),
       '#default_value' => !empty($settings['label_display']) ? $settings['label_display'] : 'above',
       '#access' => !$is_hidden,
+      '#weight' => -10,
     ];
 
     $element['settings'] = [
@@ -217,6 +235,9 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
       $subfield_formatter = $this->fieldceptionHelper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_formatter_settings, $this->viewMode, $this->label);
       $summary[] = $this->t('Label display: %value', ['%value' => $this->getFieldLabelOptions()[$settings['label_display']]]);
       $summary[] = $this->t('Format: %value', ['%value' => $subfield_formatter_options[$subfield_formatter_type]]);
+      if (!empty($settings['link_to_field']) && isset($this->getLinkFieldOptions()[$settings['link_to_field']])) {
+        $summary[] = $this->t('Link using field: %value', ['%value' => $this->getLinkFieldOptions()[$settings['link_to_field']]]);
+      }
       $summary = array_merge($summary, $subfield_formatter->settingsSummary());
     }
     else {

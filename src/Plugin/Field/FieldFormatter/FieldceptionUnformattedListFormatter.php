@@ -58,8 +58,8 @@ class FieldceptionUnformattedListFormatter extends FieldceptionBase {
             '#label_display' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
             '#content' => $content,
           ];
-          if (!empty($subfield_formatter_settings['link_to_field']) && isset($field_settings['storage'][$subfield_formatter_settings['link_to_field']])) {
-            $subfield_link = $subfield_formatter_settings['link_to_field'];
+          if (!empty($subfield_settings['link_to_field']) && isset($field_settings['storage'][$subfield_settings['link_to_field']])) {
+            $subfield_link = $subfield_settings['link_to_field'];
             $subfield_link_config = $field_settings['storage'][$subfield_link];
             $subfield_link_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $subfield_link_config, $subfield_link);
             $subfield_link_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_link_definition, $entity, $delta);
@@ -68,6 +68,7 @@ class FieldceptionUnformattedListFormatter extends FieldceptionBase {
               $url = $this->buildUrl($first);
               if ($url) {
                 $element[$delta][$subfield]['#tag'] = 'a';
+                $element[$delta][$subfield]['#attributes'] = $url->getOption('attributes');
                 $element[$delta][$subfield]['#attributes']['href'] = $url->toString();
               }
             }

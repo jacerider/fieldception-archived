@@ -45,11 +45,12 @@ class FieldceptionEntityReferenceItem extends EntityReferenceItem {
     $settings = $field_definition->getSettings();
     foreach ($settings['storage'] as $subfield => $config) {
       if ($current_subfield == $subfield) {
+        /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
         $fieldception_helper = \Drupal::service('fieldception.helper');
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_form_state = $fieldception_helper->getSubfieldFormState($subfield_definition, $form_state);
         parent::fieldSettingsFormValidate($form, $subfield_form_state);
-        $form_state->setValue(['settings', '_edit', 'settings'], $subfield_form_state->getValue(['settings']));
+        $form_state->setValue(['settings'], $subfield_form_state->getValue(['settings']));
       }
     }
   }

@@ -41,8 +41,8 @@ class FieldceptionDynamicEntityReferenceItem extends DynamicEntityReferenceItem 
    *   The form state of the (entire) configuration form.
    */
   public static function fieldSettingsFormValidate(array $form, FormStateInterface $form_state) {
+    $current_subfield = $form['#fieldception_subfield'];
     $field_definition = $form_state->getFormObject()->getEntity();
-    $current_subfield = array_slice($form['#parents'], 2, 1)[0];
     $settings = $field_definition->getSettings();
     foreach ($settings['storage'] as $subfield => $config) {
       if ($current_subfield == $subfield) {
@@ -51,6 +51,7 @@ class FieldceptionDynamicEntityReferenceItem extends DynamicEntityReferenceItem 
         $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_form_state = $fieldception_helper->getSubfieldFormState($subfield_definition, $form_state);
         parent::fieldSettingsFormValidate($form, $subfield_form_state);
+        $form_state->setValue(['settings'], $subfield_form_state->getValue(['settings']));
       }
     }
   }

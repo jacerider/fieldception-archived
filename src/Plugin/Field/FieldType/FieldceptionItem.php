@@ -700,11 +700,13 @@ class FieldceptionItem extends FieldItemBase {
 
       $element['_edit']['settings'] = [];
       $element['_edit']['settings'] = $subfield_storage->fieldSettingsForm($element['_edit']['settings'], $subfield_form_state);
-      $element['_edit']['settings']['#fieldception_subfield'] = $subfield;
-      $element['_edit']['settings'] += [
-        '#element_validate' => [],
-      ];
-      array_unshift($element['_edit']['settings']['#element_validate'], [$class_name, 'settingsEditSettingsToSettings']);
+      if (!empty($element['_edit']['settings'])) {
+        $element['_edit']['settings']['#fieldception_subfield'] = $subfield;
+        $element['_edit']['settings'] += [
+          '#element_validate' => [],
+        ];
+        array_unshift($element['_edit']['settings']['#element_validate'], [$class_name, 'settingsEditSettingsToSettings']);
+      }
 
       $element['_edit']['actions'] = [
         '#type' => 'actions',
@@ -816,7 +818,8 @@ class FieldceptionItem extends FieldItemBase {
     $settings = $form_state->getValue(['settings', '_edit'], []);
     // Merge settings that were set to parent level via
     // settingsEditSettingsToSettings().
-    $settings['settings'] = array_intersect_key($settings['settings'], $settings['settings']['_edit']['settings']);
+    $settings['settings'] = array_intersect_key($form_state->getValue(['settings']), $settings['settings']);
+    unset($settings['actions']);
     if (empty($settings['settings'])) {
       unset($settings['settings']);
     }

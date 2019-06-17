@@ -139,8 +139,6 @@ class FieldceptionHelper {
       }
       if (is_array($v)) {
         $v = hash('md5', json_encode($v));
-        // $v = 1;
-        // $v = $this->toKey($v);
       }
       if ($v instanceof FieldceptionFieldStorageDefinition) {
         $v = $v->getKey();

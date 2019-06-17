@@ -116,7 +116,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
           '#type' => 'select',
           '#title' => $this->t('Link using a field'),
           '#options' => ['' => $this->t('- None -')] + $link_field_options,
-          '#default_value' => !empty($subfield_formatter_settings['link_to_field']) ? $subfield_formatter_settings['link_to_field'] : '',
+          '#default_value' => !empty($subfield_settings['link_to_field']) ? $subfield_settings['link_to_field'] : '',
           '#weight' => -10,
         ];
       }

@@ -166,7 +166,7 @@ class FieldceptionHelper {
   }
 
   /**
-   * Prepare config.$_COOKIE.
+   * Prepare config.
    *
    * Supports preconfigured fields.
    *
@@ -245,14 +245,13 @@ class FieldceptionHelper {
    *   A subfield definition.
    */
   public function getSubfieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
-    $this->prepareConfig($config);
+    // $this->prepareConfig($config);
     $key = $this->toKey([
       $definition,
       $config,
       $subfield,
-      'storage',
     ]);
-    if (!isset($this->subfieldDefinitions[$key])) {
+    if (!isset($this->subfieldStorageDefinitions[$key])) {
       $this->subfieldStorageDefinitions[$key] = FieldceptionFieldStorageDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
         ->setKey($key);
     }

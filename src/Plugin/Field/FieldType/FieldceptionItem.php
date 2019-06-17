@@ -10,6 +10,9 @@ use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Field\EntityReferenceFieldItemList;
 use Drupal\field_ui\FieldUI;
+use Drupal\Core\TypedData\DataDefinitionInterface;
+use Drupal\Core\TypedData\TypedDataInterface;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 
 /**
  * Plugin implementation of the 'fieldception' field type.
@@ -24,6 +27,22 @@ use Drupal\field_ui\FieldUI;
  * )
  */
 class FieldceptionItem extends FieldItemBase {
+  use DependencySerializationTrait;
+
+  /**
+   * The fieldception helper.
+   *
+   * @var \Drupal\fieldception\FieldceptionHelper
+   */
+  protected $fieldceptionHelper;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct(DataDefinitionInterface $definition, $name = NULL, TypedDataInterface $parent = NULL) {
+    parent::__construct($definition, $name, $parent);
+    $this->fieldceptionHelper = \Drupal::service('fieldception.helper');
+  }
 
   /**
    * {@inheritdoc}
@@ -56,13 +75,12 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   protected function getSettings() {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = parent::getSettings();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_storage_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
     $settings['fields'] = array_intersect_key($settings['fields'], $settings['storage']);
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
+      $subfield_storage_definition = $this->fieldceptionHelper->getSubfieldStorageDefinition($field_storage_definition, $config, $subfield);
+      $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_storage_definition);
       $settings['fields'][$subfield] = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
       // Merge in the subfield field settings.
       $settings['fields'][$subfield] += ['settings' => []];
@@ -86,16 +104,15 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function storageSettingsForm(array &$form, FormStateInterface $form_state, $has_data) {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $entity = $this->getEntity();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
     $class_name = get_class($this);
 
     // Gather valid field types.
     $field_types = [];
     $field_type_options = [];
-    foreach ($fieldception_helper->getFieldTypePluginManager()->getGroupedDefinitions($fieldception_helper->getFieldTypePluginManager()->getUiDefinitions()) as $category => $types) {
+    foreach ($this->fieldceptionHelper->getFieldTypePluginManager()->getGroupedDefinitions($this->fieldceptionHelper->getFieldTypePluginManager()->getUiDefinitions()) as $category => $types) {
       foreach ($types as $name => $field_type) {
         $field_types[$name] = $category . ': ' . $field_type['label'];
         $field_type_options[$category][$name] = $field_type['label'];
@@ -234,9 +251,9 @@ class FieldceptionItem extends FieldItemBase {
     ];
     if ($op == 'edit' && ($subfield = $form_state->get('fieldception_field'))) {
       $config = $storage[$subfield];
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_definition, $entity);
+      $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_definition->getFieldStorageDefinition(), $subfield_items);
       $form['_edit']['label'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Field label'),
@@ -570,10 +587,9 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $entity = $this->getEntity();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
     $class_name = get_class($this);
     $id = 'fieldception-wrapper';
     $form_state->set('fieldception_entity', $entity);
@@ -595,7 +611,7 @@ class FieldceptionItem extends FieldItemBase {
 
     // Gather valid field types.
     $field_types = [];
-    foreach ($fieldception_helper->getFieldTypePluginManager()->getGroupedDefinitions($fieldception_helper->getFieldTypePluginManager()->getUiDefinitions()) as $category => $types) {
+    foreach ($this->fieldceptionHelper->getFieldTypePluginManager()->getGroupedDefinitions($this->fieldceptionHelper->getFieldTypePluginManager()->getUiDefinitions()) as $category => $types) {
       foreach ($types as $name => $field_type) {
         $field_types[$name] = $category . ': ' . $field_type['label'];
       }
@@ -671,10 +687,10 @@ class FieldceptionItem extends FieldItemBase {
         'settings',
         '_edit',
       ], []));
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
-      $subfield_form_state = $fieldception_helper->getSubfieldFormState($subfield_definition, $form_state);
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_definition, $entity);
+      $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_definition->getFieldStorageDefinition(), $subfield_items);
+      $subfield_form_state = $this->fieldceptionHelper->getSubfieldFormState($subfield_definition, $form_state);
 
       $element['_edit']['required'] = [
         '#type' => 'checkbox',
@@ -684,6 +700,11 @@ class FieldceptionItem extends FieldItemBase {
 
       $element['_edit']['settings'] = [];
       $element['_edit']['settings'] = $subfield_storage->fieldSettingsForm($element['_edit']['settings'], $subfield_form_state);
+      $element['_edit']['settings']['#fieldception_subfield'] = $subfield;
+      $element['_edit']['settings'] += [
+        '#element_validate' => [],
+      ];
+      array_unshift($element['_edit']['settings']['#element_validate'], [$class_name, 'settingsEditSettingsToSettings']);
 
       $element['_edit']['actions'] = [
         '#type' => 'actions',
@@ -693,7 +714,7 @@ class FieldceptionItem extends FieldItemBase {
         '#value' => $this->t('Update'),
         '#submit' => [[$class_name, 'editFieldSubmit']],
         '#limit_validation_errors' => [
-          ['settings', '_edit'],
+          ['settings'],
           ['third_party_settings'],
         ],
         '#ajax' => [
@@ -720,17 +741,18 @@ class FieldceptionItem extends FieldItemBase {
    * After form build.
    */
   public static function fieldFormAfterBuild($form, FormStateInterface $form_state) {
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $storage = $form_state->get('fieldception_storage');
     $fields = $form_state->get('fieldception_fields');
     $entity = $form_state->getFormObject()->getEntity();
     $form_object = $form_state->getFormObject();
-    $field_definition = $form_object->getEntity()->getFieldStorageDefinition();
+    $field_definition = $form_object->getEntity();
     $op = $form_state->get('fieldception_op');
 
     if ($op == 'edit' && ($subfield = $form_state->get('fieldception_field'))) {
       $config = NestedArray::mergeDeep($storage[$subfield], $fields[$subfield]);
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
       $subfield_entity = $fieldception_helper->getSubfieldConfig($subfield_definition, $form_object->getEntity());
       $subfield_entity->set('third_party_settings', $entity->get('third_party_settings'));
       $form_object = clone $form_state->getFormObject();
@@ -774,6 +796,17 @@ class FieldceptionItem extends FieldItemBase {
   }
 
   /**
+   * Move nested setting values to parent setting values.
+   */
+  public static function settingsEditSettingsToSettings($element, FormStateInterface $form_state) {
+    $form_state->setValue(['settings'], $form_state->getValue(['settings']) + $form_state->getValue([
+      'settings',
+      '_edit',
+      'settings',
+    ], []));
+  }
+
+  /**
    * Submit handler for the "edit form" button.
    */
   public static function editFieldSubmit(array $form, FormStateInterface $form_state) {
@@ -781,10 +814,13 @@ class FieldceptionItem extends FieldItemBase {
     $fields = $form_state->get('fieldception_fields');
     $subfield = $form_state->get('fieldception_field');
     $settings = $form_state->getValue(['settings', '_edit'], []);
-    $fields[$subfield] = array_intersect_key($settings, $fields[$subfield]);
-    if (!empty($settings['settings'])) {
-      $fields[$subfield]['settings'] = array_intersect_key($settings['settings'], $fields[$subfield]['settings']);
+    // Merge settings that were set to parent level via
+    // settingsEditSettingsToSettings().
+    $settings['settings'] = array_intersect_key($settings['settings'], $settings['settings']['_edit']['settings']);
+    if (empty($settings['settings'])) {
+      unset($settings['settings']);
     }
+    $fields[$subfield] = array_intersect_key($settings, $fields[$subfield]);
     $form_state->set('fieldception_fields', $fields);
     foreach ($form_state->getValue('third_party_settings', []) as $module => $values) {
       foreach ($values as $key => $value) {
@@ -812,19 +848,18 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function getConstraints() {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $entity = $this->getEntity();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
 
     $constraint_manager = \Drupal::typedDataManager()->getValidationConstraintManager();
     $constraints = parent::getConstraints();
 
     $subfield_constraints = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_definition, $entity);
+      $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_definition->getFieldStorageDefinition(), $subfield_items);
       $field_constraints = $subfield_storage->getConstraints();
       if ($subfield_storage->getPluginId() == 'field_item:integer' && !$subfield_storage->getSetting('unsigned')) {
         // Amazingly, Drupal 8 does not check max size on signed integer fields.
@@ -864,15 +899,14 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function isEmpty() {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $entity = $this->getEntity();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
 
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
+      $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_definition->getFieldStorageDefinition(), $subfield_items);
 
       if (!$subfield_storage->isEmpty()) {
         return FALSE;
@@ -899,16 +933,14 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function referencedEntities() {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $entity = $this->getEntity();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
 
     $entities = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-      $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
-      $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_items = $this->fieldceptionHelper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
       if ($subfield_items instanceof EntityReferenceFieldItemList) {
         $entities += $subfield_items->referencedEntities();
       }
@@ -921,6 +953,7 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public static function schema(FieldStorageDefinitionInterface $field_definition) {
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $field_definition->getSettings();
     $columns = [];
@@ -950,6 +983,7 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public static function propertyDefinitions(FieldStorageDefinitionInterface $field_definition) {
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $field_definition->getSettings();
 
@@ -974,6 +1008,7 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public static function calculateStorageDependencies(FieldStorageDefinitionInterface $field_definition) {
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $field_definition->getSettings();
     $dependencies = parent::calculateStorageDependencies($field_definition);
@@ -989,14 +1024,13 @@ class FieldceptionItem extends FieldItemBase {
    * {@inheritdoc}
    */
   public function setValue($values, $notify = TRUE) {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
     if (is_array($values)) {
       foreach ($settings['storage'] as $subfield => $config) {
-        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
-        $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
-        $subfield_values = $fieldception_helper->convertValueToSubfieldValue($subfield_definition, $values);
+        $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+        $subfield_storage = $this->fieldceptionHelper->getSubfieldStorage($subfield_definition->getFieldStorageDefinition());
+        $subfield_values = $this->fieldceptionHelper->convertValueToSubfieldValue($subfield_definition, $values);
         $subfield_storage->setValue($subfield_values);
       }
     }

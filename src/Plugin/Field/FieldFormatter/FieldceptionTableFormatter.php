@@ -73,10 +73,11 @@ class FieldceptionTableFormatter extends FieldceptionBase {
    * {@inheritdoc}
    */
   public function viewElements(FieldItemListInterface $items, $langcode) {
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $field_settings = $this->getFieldSettings();
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $field_definition = $this->fieldDefinition;
     $entity = $items->getEntity();
     $cacheable_metadata = new CacheableMetadata();
 
@@ -89,7 +90,7 @@ class FieldceptionTableFormatter extends FieldceptionBase {
         $element['#header'][$subfield] = $config['label'];
         $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
         $subfield_formatter_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         if ($subfield_settings['type'] === '_hidden') {
           continue;
         }

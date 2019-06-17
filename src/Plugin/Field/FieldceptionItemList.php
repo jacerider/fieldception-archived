@@ -26,9 +26,10 @@ class FieldceptionItemList extends FieldItemList {
     $subfield_item_lists = [];
     $settings = $this->getSettings();
     $entity = $this->getEntity();
+    /** @var \Drupal\fieldception\FieldceptionHelper $fieldception_helper */
     $fieldception_helper = \Drupal::service('fieldception.helper');
     $field_name = $this->getFieldDefinition()->getName();
-    $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
+    $field_definition = $this->getFieldDefinition();
 
     $items = $this->list;
     if (isset($entity->original) && count($items) < count($entity->original->{$field_name})) {
@@ -41,7 +42,7 @@ class FieldceptionItemList extends FieldItemList {
 
     foreach ($items as $delta => $item) {
       foreach ($settings['storage'] as $subfield => $config) {
-        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
         $subfield_item_lists[$delta][$subfield] = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
       }
     }

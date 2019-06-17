@@ -43,10 +43,11 @@ class FieldceptionConstraintValidator extends ConstraintValidator implements Con
   public function validate($value, Constraint $constraint) {
     $item = $constraint->subfieldItems->first();
     if ($item) {
-      $name = $item->getFieldDefinition()->getName();
-      $item->getFieldDefinition()->setName($item->getFieldDefinition()->getParentfield());
+      $field_definition = $item->getFieldDefinition();
+      $name = $field_definition->getName();
+      $field_definition->setName($field_definition->getParentfield());
       $violations = $this->typedDataManager->getValidator()->validate($item, $constraint->subfieldConstraints);
-      $item->getFieldDefinition()->setName($name);
+      $field_definition->setName($name);
       $subfield_definition = $constraint->subfieldItems->getFieldDefinition();
       foreach ($violations as $violation) {
         $new = $this->context->buildViolation($violation->getMessage(), $violation->getParameters(), $violation->getInvalidValue(), $violation->getPlural(), $violation->getCode());

@@ -5,7 +5,7 @@ namespace Drupal\fieldception\Plugin\Validation\Constraint;
 use Symfony\Component\Validator\Constraint;
 
 /**
- * Telephone constraint.
+ * Fieldception constraint.
  *
  * @Constraint(
  *   id = "Fieldception",

@@ -182,7 +182,6 @@ class FieldceptionFieldStorageDefinition extends BaseFieldDefinition implements 
       ->setRevisionable($definition->isRevisionable())
       ->setSettings($config['settings'])
       ->setTargetEntityTypeId($definition->getTargetEntityTypeId())
-      // ->setTargetBundle($definition->getTargetBundle())
       ->setTranslatable($definition->isTranslatable());
     return $storage;
   }
@@ -195,7 +194,6 @@ class FieldceptionFieldStorageDefinition extends BaseFieldDefinition implements 
       $field_type_plugin_manager = \Drupal::service('plugin.manager.field.field_type');
 
       $item_list_class = $field_type_plugin_manager->getDefinition($this->getFieldStorageDefinition()->getType())['list_class'];
-
       $items_list = $item_list_class::createInstance($this->getFieldStorageDefinition(), $this->getName(), $entity->getTypedData());
       $item = $field_type_plugin_manager->createFieldItem($items_list, 0);
       return $item;

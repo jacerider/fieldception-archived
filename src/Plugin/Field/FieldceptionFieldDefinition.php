@@ -2,14 +2,11 @@
 
 namespace Drupal\fieldception\Plugin\Field;
 
-use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\OptionsProviderInterface;
 use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldConfigBase;
-use Drupal\field\Entity\FieldConfig;
-use Drupal\field\FieldStorageConfigInterface;
 use Drupal\Core\Field\FieldException;
 
 /**
@@ -61,6 +58,19 @@ class FieldceptionFieldDefinition extends FieldConfigBase implements ThirdPartyS
    */
   public function getName() {
     return $this->name;
+  }
+
+  /**
+   * Sets the subfield name.
+   *
+   * @param string $name
+   *   The subfield name.
+   *
+   * @return $this
+   */
+  public function setName($name) {
+    $this->name = $name;
+    return $this;
   }
 
   /**
@@ -208,21 +218,6 @@ class FieldceptionFieldDefinition extends FieldConfigBase implements ThirdPartyS
       'type' => $config['type'],
       'label' => $config['label'],
     ]);
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getOptionsProvider($property_name, FieldableEntityInterface $entity) {
-    if (is_subclass_of($this->getFieldItemClass(), OptionsProviderInterface::class)) {
-      $field_type_plugin_manager = \Drupal::service('plugin.manager.field.field_type');
-
-      $item_list_class = $field_type_plugin_manager->getDefinition($this->getFieldStorageDefinition()->getType())['list_class'];
-
-      $items_list = $item_list_class::createInstance($this->getFieldStorageDefinition(), $this->getName(), $entity->getTypedData());
-      $item = $field_type_plugin_manager->createFieldItem($items_list, 0);
-      return $item;
-    }
   }
 
   /**

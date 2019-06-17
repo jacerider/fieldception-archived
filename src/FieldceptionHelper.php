@@ -57,6 +57,13 @@ class FieldceptionHelper {
   protected $subfieldDefinitions = [];
 
   /**
+   * Static cache of storage definitions.
+   *
+   * @var array
+   */
+  protected $subfieldStorageDefinitions = [];
+
+  /**
    * Static cache of storage configs.
    *
    * @var array
@@ -192,37 +199,6 @@ class FieldceptionHelper {
   }
 
   /**
-   * Get subfield storage definition.
-   *
-   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
-   *   The field definition.
-   * @param array $config
-   *   An array of configuration options with the following keys:
-   *   - type: The field type id.
-   *   - label: The label of the field.
-   *   - settings: An array of storage settings.
-   * @param string $subfield
-   *   The subfield name.
-   *
-   * @return \Drupal\Core\Field\FieldDefinitionInterface
-   *   A subfield definition.
-   */
-  public function getSubfieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
-    $this->prepareConfig($config);
-    $key = $this->toKey([
-      $definition,
-      $config,
-      $subfield,
-      'storage',
-    ]);
-    if (!isset($this->subfieldDefinitions[$key])) {
-      $this->subfieldDefinitions[$key] = FieldceptionFieldStorageDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
-        ->setKey($key);
-    }
-    return $this->subfieldDefinitions[$key];
-  }
-
-  /**
    * Get subfield definition.
    *
    * @param \Drupal\Core\Field\FieldConfigInterface $definition
@@ -235,7 +211,7 @@ class FieldceptionHelper {
    * @param string $subfield
    *   The subfield name.
    *
-   * @return \Drupal\Core\Field\FieldDefinitionInterface
+   * @return \Drupal\Core\Field\FieldConfigInterface
    *   A subfield definition.
    */
   public function getSubfieldDefinition(FieldConfigInterface $definition, array $config, $subfield) {
@@ -250,6 +226,37 @@ class FieldceptionHelper {
         ->setKey($key);
     }
     return $this->subfieldDefinitions[$key];
+  }
+
+  /**
+   * Get subfield storage definition.
+   *
+   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
+   *   The field definition.
+   * @param array $config
+   *   An array of configuration options with the following keys:
+   *   - type: The field type id.
+   *   - label: The label of the field.
+   *   - settings: An array of storage settings.
+   * @param string $subfield
+   *   The subfield name.
+   *
+   * @return \Drupal\Core\Field\FieldStorageDefinitionInterface
+   *   A subfield definition.
+   */
+  public function getSubfieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
+    $this->prepareConfig($config);
+    $key = $this->toKey([
+      $definition,
+      $config,
+      $subfield,
+      'storage',
+    ]);
+    if (!isset($this->subfieldDefinitions[$key])) {
+      $this->subfieldStorageDefinitions[$key] = FieldceptionFieldStorageDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
+        ->setKey($key);
+    }
+    return $this->subfieldStorageDefinitions[$key];
   }
 
   /**
@@ -279,7 +286,7 @@ class FieldceptionHelper {
   /**
    * Get subfield storage.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldStorageDefinitionInterface $subfield_definition
    *   The subfield definition.
    * @param \Drupal\Core\Field\FieldItemListInterface|null $subfield_item_list
    *   The field item list.
@@ -287,7 +294,7 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\WidgetInterface
    *   The storage plugin.
    */
-  public function getSubfieldStorage(FieldDefinitionInterface $subfield_definition, $subfield_item_list = NULL) {
+  public function getSubfieldStorage(FieldStorageDefinitionInterface $subfield_definition, $subfield_item_list = NULL) {
     $key = $this->toKey([
       $subfield_definition,
       $subfield_item_list,
@@ -299,7 +306,6 @@ class FieldceptionHelper {
         'name' => $subfield_definition->getName(),
         'parent' => $subfield_item_list,
       ]);
-
       if ($subfield_item_list) {
         $item = $subfield_item_list->first();
         if ($item) {
@@ -314,7 +320,7 @@ class FieldceptionHelper {
   /**
    * Get subfield widget.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldConfigInterface $subfield_definition
    *   The subfield definition.
    * @param string $widget_type
    *   The widget type.
@@ -324,7 +330,7 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\WidgetInterface
    *   The widget plugin.
    */
-  public function getSubfieldWidget(FieldDefinitionInterface $subfield_definition, $widget_type, array $settings = []) {
+  public function getSubfieldWidget(FieldConfigInterface $subfield_definition, $widget_type, array $settings = []) {
     $key = $this->toKey([
       $subfield_definition,
       $widget_type,
@@ -444,7 +450,7 @@ class FieldceptionHelper {
   /**
    * Get subfield item list.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldConfigInterface $subfield_definition
    *   The subfield definition.
    * @param \Drupal\Core\Entity\ContentEntityInterface $entity
    *   The parent entity.
@@ -458,7 +464,7 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\FieldItemListInterface
    *   The field item list.
    */
-  public function getSubfieldItemList(FieldDefinitionInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0, $values = NULL) {
+  public function getSubfieldItemList(FieldConfigInterface $subfield_definition, ContentEntityInterface $entity, $delta = 0, $values = NULL) {
     $key = $this->toKey([
       $subfield_definition,
       $entity,
@@ -515,7 +521,7 @@ class FieldceptionHelper {
   /**
    * Convert parent value to subfield value.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldConfigInterface $subfield_definition
    *   The subfield definition.
    * @param array $value
    *   The array containing the delta value.
@@ -523,12 +529,12 @@ class FieldceptionHelper {
    * @return array
    *   An array containing the subfield value.
    */
-  public function convertValueToSubfieldValue(FieldDefinitionInterface $subfield_definition, array $value) {
+  public function convertValueToSubfieldValue(FieldConfigInterface $subfield_definition, array $value) {
     $subfield_value = [];
     if (!empty($value)) {
       $subfield = $subfield_definition->getSubfield();
-      $subfield_storage = $this->getSubfieldStorage($subfield_definition);
-      $schema = $subfield_storage::schema($subfield_definition);
+      $subfield_storage = $this->getSubfieldStorage($subfield_definition->getFieldStorageDefinition());
+      $schema = $subfield_storage::schema($subfield_definition->getFieldStorageDefinition());
       foreach ($schema['columns'] as $column_name => $column) {
         $parent_column_name = $subfield . '_' . $column_name;
         if (array_key_exists($parent_column_name, $value)) {
@@ -542,7 +548,7 @@ class FieldceptionHelper {
   /**
    * Convert subfield value to parent value.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldConfigInterface $subfield_definition
    *   The subfield definition.
    * @param array $subfield_value
    *   The array containing the delta value.
@@ -550,11 +556,11 @@ class FieldceptionHelper {
    * @return array
    *   An array containing the parent value.
    */
-  public function convertSubfieldValueToValue(FieldDefinitionInterface $subfield_definition, array $subfield_value) {
-    $subfield = $subfield_definition->getSubfield();
-    $subfield_storage = $this->getSubfieldStorage($subfield_definition);
+  public function convertSubfieldValueToValue(FieldConfigInterface $subfield_definition, array $subfield_value) {
     $value = [];
-    $schema = $subfield_storage::schema($subfield_definition);
+    $subfield = $subfield_definition->getSubfield();
+    $subfield_storage = $this->getSubfieldStorage($subfield_definition->getFieldStorageDefinition());
+    $schema = $subfield_storage::schema($subfield_definition->getFieldStorageDefinition());
     foreach ($schema['columns'] as $column_name => $column) {
       $parent_column_name = $subfield . '_' . $column_name;
       if (isset($subfield_value[$column_name])) {
@@ -567,7 +573,7 @@ class FieldceptionHelper {
   /**
    * Get a cloned FormState ready for sub plugins.
    *
-   * @param Drupal\Core\Field\FieldDefinitionInterface $subfield_definition
+   * @param Drupal\Core\Field\FieldConfigInterface $subfield_definition
    *   The subfield definition.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   The form state of the (entire) configuration form.
@@ -575,19 +581,19 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Form\FormStateInterface
    *   A form state ready for use in sub plugins.
    */
-  public function getSubfieldFormState(FieldDefinitionInterface $subfield_definition, FormStateInterface $form_state) {
+  public function getSubfieldFormState(FieldConfigInterface $subfield_definition, FormStateInterface $form_state) {
     $settings = $subfield_definition->getSettings();
     $subform_state = clone $form_state;
 
-    $parent_field = $subform_state->getFormObject()->getEntity();
-    $subfield_storage = clone $parent_field->getFieldStorageDefinition();
+    $field_definition = $subform_state->getFormObject()->getEntity();
+    $subfield_storage = clone $field_definition->getFieldStorageDefinition();
     $subfield_storage->setSettings($settings);
-    $field_array = $parent_field->toArray();
+    $field_array = $field_definition->toArray();
     $field_array['field_storage'] = $subfield_storage;
     $field_array['settings'] = $settings;
 
     // Create a new temporary field config entity with our modified storage.
-    $field = \Drupal::entityTypeManager()->getStorage($parent_field->getEntityTypeId())->create($field_array);
+    $field = \Drupal::entityTypeManager()->getStorage($field_definition->getEntityTypeId())->create($field_array);
 
     // Clone field state and set the subfield storage as the form object.
     $subform_object = clone $subform_state->getFormObject();

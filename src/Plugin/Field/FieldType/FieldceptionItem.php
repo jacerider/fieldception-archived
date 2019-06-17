@@ -61,7 +61,7 @@ class FieldceptionItem extends FieldItemBase {
     $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
     $settings['fields'] = array_intersect_key($settings['fields'], $settings['storage']);
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
       $settings['fields'][$subfield] = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
       // Merge in the subfield field settings.
@@ -234,7 +234,7 @@ class FieldceptionItem extends FieldItemBase {
     ];
     if ($op == 'edit' && ($subfield = $form_state->get('fieldception_field'))) {
       $config = $storage[$subfield];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
       $form['_edit']['label'] = [
@@ -671,7 +671,7 @@ class FieldceptionItem extends FieldItemBase {
         'settings',
         '_edit',
       ], []));
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
       $subfield_form_state = $fieldception_helper->getSubfieldFormState($subfield_definition, $form_state);
@@ -730,7 +730,7 @@ class FieldceptionItem extends FieldItemBase {
 
     if ($op == 'edit' && ($subfield = $form_state->get('fieldception_field'))) {
       $config = NestedArray::mergeDeep($storage[$subfield], $fields[$subfield]);
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_entity = $fieldception_helper->getSubfieldConfig($subfield_definition, $form_object->getEntity());
       $subfield_entity->set('third_party_settings', $entity->get('third_party_settings'));
       $form_object = clone $form_state->getFormObject();
@@ -822,7 +822,7 @@ class FieldceptionItem extends FieldItemBase {
 
     $subfield_constraints = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
       $field_constraints = $subfield_storage->getConstraints();
@@ -870,7 +870,7 @@ class FieldceptionItem extends FieldItemBase {
     $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
 
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
 
@@ -906,7 +906,7 @@ class FieldceptionItem extends FieldItemBase {
 
     $entities = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, 0, $this->getValue());
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition, $subfield_items);
       if ($subfield_items instanceof EntityReferenceFieldItemList) {
@@ -925,7 +925,7 @@ class FieldceptionItem extends FieldItemBase {
     $settings = $field_definition->getSettings();
     $columns = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
       $schema = $subfield_storage::schema($subfield_definition);
       if (isset($schema['columns'])) {
@@ -955,7 +955,7 @@ class FieldceptionItem extends FieldItemBase {
 
     $properties = [];
     foreach ($settings['storage'] as $subfield => $config) {
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
       foreach ($subfield_storage::propertyDefinitions($subfield_definition) as $property_name => $property) {
         $property->setRequired(FALSE);
@@ -994,7 +994,7 @@ class FieldceptionItem extends FieldItemBase {
     $field_definition = $this->getFieldDefinition()->getFieldStorageDefinition();
     if (is_array($values)) {
       foreach ($settings['storage'] as $subfield => $config) {
-        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
         $subfield_storage = $fieldception_helper->getSubfieldStorage($subfield_definition);
         $subfield_values = $fieldception_helper->convertValueToSubfieldValue($subfield_definition, $values);
         $subfield_storage->setValue($subfield_values);

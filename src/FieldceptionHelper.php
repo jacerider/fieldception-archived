@@ -6,7 +6,7 @@ use Drupal\Core\Field\FieldTypePluginManagerInterface;
 use Drupal\Core\Field\WidgetPluginManager;
 use Drupal\Core\Plugin\DefaultPluginManager;
 use Drupal\Core\Field\FieldDefinitionInterface;
-use Drupal\fieldception\Plugin\Field\FieldceptionFieldDefinition;
+use Drupal\fieldception\Plugin\Field\FieldceptionFieldStorageDefinition;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Field\FieldItemListInterface;
@@ -14,6 +14,7 @@ use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Field\EntityReferenceFieldItemList;
+use Drupal\fieldception\Plugin\Field\FieldceptionFieldDefinition;
 
 /**
  * Class FieldceptionHelper.
@@ -134,7 +135,7 @@ class FieldceptionHelper {
         // $v = 1;
         // $v = $this->toKey($v);
       }
-      if ($v instanceof FieldceptionFieldDefinition) {
+      if ($v instanceof FieldceptionFieldStorageDefinition) {
         $v = $v->getKey();
       }
       if ($v instanceof FieldConfigInterface) {
@@ -191,7 +192,7 @@ class FieldceptionHelper {
   }
 
   /**
-   * Get subfield definition.
+   * Get subfield storage definition.
    *
    * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
    *   The field definition.
@@ -206,7 +207,38 @@ class FieldceptionHelper {
    * @return \Drupal\Core\Field\FieldDefinitionInterface
    *   A subfield definition.
    */
-  public function getSubfieldDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
+  public function getSubfieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
+    $this->prepareConfig($config);
+    $key = $this->toKey([
+      $definition,
+      $config,
+      $subfield,
+      'storage',
+    ]);
+    if (!isset($this->subfieldDefinitions[$key])) {
+      $this->subfieldDefinitions[$key] = FieldceptionFieldStorageDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
+        ->setKey($key);
+    }
+    return $this->subfieldDefinitions[$key];
+  }
+
+  /**
+   * Get subfield definition.
+   *
+   * @param \Drupal\Core\Field\FieldConfigInterface $definition
+   *   The field definition.
+   * @param array $config
+   *   An array of configuration options with the following keys:
+   *   - type: The field type id.
+   *   - label: The label of the field.
+   *   - settings: An array of storage settings.
+   * @param string $subfield
+   *   The subfield name.
+   *
+   * @return \Drupal\Core\Field\FieldDefinitionInterface
+   *   A subfield definition.
+   */
+  public function getSubfieldDefinition(FieldConfigInterface $definition, array $config, $subfield) {
     $this->prepareConfig($config);
     $key = $this->toKey([
       $definition,
@@ -214,7 +246,7 @@ class FieldceptionHelper {
       $subfield,
     ]);
     if (!isset($this->subfieldDefinitions[$key])) {
-      $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldStorageDefinition($definition, $config, $subfield)
+      $this->subfieldDefinitions[$key] = FieldceptionFieldDefinition::createFromParentFieldDefinition($definition, $config, $subfield)
         ->setKey($key);
     }
     return $this->subfieldDefinitions[$key];
@@ -238,6 +270,7 @@ class FieldceptionHelper {
         'field_name' => $subfield_definition->getSubfield(),
         'entity_type' => $subfield_definition->getTargetEntityTypeId(),
         'type' => $subfield_definition->getType(),
+        'bundle' => $subfield_definition->getTargetBundle(),
       ]);
     }
     return $this->subfieldStorageConfigs[$key];
@@ -346,7 +379,6 @@ class FieldceptionHelper {
       $view_mode,
     ]);
     if (!isset($this->subfieldFormatters[$key])) {
-      $field_type_definition = $this->fieldTypePluginManager->getDefinition($subfield_definition->getType());
       $this->subfieldFormatters[$key] = $this->fieldFormatterPluginManager->createInstance($formatter_type, [
         'field_definition' => $subfield_definition,
         'settings' => $settings,

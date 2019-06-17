@@ -37,7 +37,7 @@ class FieldceptionUnformattedListFormatter extends FieldceptionBase {
       foreach ($field_settings['storage'] as $subfield => $config) {
         $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
         $subfield_formatter_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
         if ($subfield_settings['type'] === '_hidden') {
           continue;
         }
@@ -61,7 +61,7 @@ class FieldceptionUnformattedListFormatter extends FieldceptionBase {
           if (!empty($subfield_formatter_settings['link_to_field']) && isset($field_settings['storage'][$subfield_formatter_settings['link_to_field']])) {
             $subfield_link = $subfield_formatter_settings['link_to_field'];
             $subfield_link_config = $field_settings['storage'][$subfield_link];
-            $subfield_link_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $subfield_link_config, $subfield_link);
+            $subfield_link_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $subfield_link_config, $subfield_link);
             $subfield_link_items = $fieldception_helper->getSubfieldItemList($subfield_link_definition, $entity, $delta);
             $first = $subfield_link_items->first();
             if (!$first->isEmpty()) {

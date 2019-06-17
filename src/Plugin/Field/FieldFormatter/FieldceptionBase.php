@@ -71,7 +71,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
    * {@inheritdoc}
    */
   public function getSettings() {
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $field_definition = $this->fieldDefinition;
     // Merge defaults before returning the array.
     if (!$this->defaultSettingsMerged) {
       $this->mergeDefaults();
@@ -94,8 +94,6 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
   public function settingsForm(array $form, FormStateInterface $form_state) {
     $settings = $this->getSettings();
     $field_settings = $this->getFieldSettings();
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
-    $field_name = $this->fieldDefinition->getName();
 
     $element = [];
 
@@ -129,7 +127,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
    * Individual field settings.
    */
   protected function settingsFormField($subfield, $config, $settings, FormStateInterface $form_state) {
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $field_definition = $this->fieldDefinition;
     $field_name = $this->fieldDefinition->getName();
     $wrapper_id = Html::getId('fieldception-' . $field_name . '-' . $subfield);
     $subfield_formatter_settings = isset($settings['settings']) ? $settings['settings'] : [];
@@ -208,7 +206,7 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
    */
   protected function settingsFieldSummary($subfield, $config, $settings) {
     $summary = [];
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $field_definition = $this->fieldDefinition;
     $subfield_formatter_settings = isset($settings['settings']) ? $settings['settings'] : [];
     $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
     $subfield_formatter_type = $settings['type'];
@@ -266,18 +264,6 @@ abstract class FieldceptionBase extends FormatterBase implements ContainerFactor
       'visually_hidden' => '- ' . $this->t('Visually Hidden') . ' -',
     ];
   }
-
-  /**
-   * Get subfield widget type.
-   */
-  // protected function getSubfieldFormatterTypee($subfield_definition) {
-  //   $subfield = $subfield_definition->getSubfield();
-  //   $settings = $this->getSettings();
-  //   if (!empty($settings['fields'][$subfield]['type'])) {
-  //     return $settings['fields'][$subfield]['type'];
-  //   }
-  //   return $this->fieldceptionHelper->getSubfieldDefaultFormatter($subfield_definition);
-  // }
 
   /**
    * Builds the \Drupal\Core\Url object for a link field item.

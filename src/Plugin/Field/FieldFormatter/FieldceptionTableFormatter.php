@@ -89,7 +89,7 @@ class FieldceptionTableFormatter extends FieldceptionBase {
         $element['#header'][$subfield] = $config['label'];
         $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
         $subfield_formatter_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
         if ($subfield_settings['type'] === '_hidden') {
           continue;
         }

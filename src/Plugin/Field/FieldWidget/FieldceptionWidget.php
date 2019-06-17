@@ -114,7 +114,7 @@ class FieldceptionWidget extends WidgetBase {
         'size' => '',
       ];
       $subfield_widget_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       // Get type. First use submitted value, Then current settings. Then
       // default formatter if nothing has been set yet.
       $subfield_widget_type = $form_state->getValue([
@@ -548,7 +548,7 @@ class FieldceptionWidget extends WidgetBase {
     foreach ($field_settings['storage'] as $subfield => $config) {
       $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
       $subfield_widget_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
       $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
       $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type, $subfield_widget_settings);
       $subfield_items = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
@@ -691,7 +691,7 @@ class FieldceptionWidget extends WidgetBase {
           }
           $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
           $subfield_widget_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
-          $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+          $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
           $subfield_name = $subfield_definition->getName();
           $subfield_widget_type = $this->getSubfieldWidgetType($subfield_definition);
           $subfield_widget = $fieldception_helper->getSubfieldWidget($subfield_definition, $subfield_widget_type, $subfield_widget_settings);

@@ -41,7 +41,7 @@ class FieldceptionItemList extends FieldItemList {
 
     foreach ($items as $delta => $item) {
       foreach ($settings['storage'] as $subfield => $config) {
-        $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
+        $subfield_definition = $fieldception_helper->getSubfieldStorageDefinition($field_definition, $config, $subfield);
         $subfield_item_lists[$delta][$subfield] = $fieldception_helper->getSubfieldItemList($subfield_definition, $entity, $delta);
       }
     }

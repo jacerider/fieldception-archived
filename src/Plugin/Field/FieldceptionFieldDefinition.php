@@ -262,8 +262,9 @@ class FieldceptionFieldDefinition extends FieldConfigBase implements ThirdPartyS
   public function getFieldStorageDefinition() {
     if (!$this->fieldStorage) {
       $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions($this->entity_type);
-      if (isset($field_storage_definitions[$this->field_name])) {
-        $field_storage_definition = \Drupal::service('fieldception.helper')->getSubfieldStorageDefinition($field_storage_definitions[$this->field_name], $field_storage_definitions[$this->field_name]->getSettings()['storage'][$this->getSubfield()], $this->getSubfield());
+      $field_name = $this->getParentfield();
+      if (isset($field_storage_definitions[$field_name])) {
+        $field_storage_definition = \Drupal::service('fieldception.helper')->getSubfieldStorageDefinition($field_storage_definitions[$field_name], $field_storage_definitions[$field_name]->getSettings()['storage'][$this->getSubfield()], $this->getSubfield());
       }
       if (!$field_storage_definition) {
         throw new FieldException("Attempt to create a field {$this->field_name} that does not exist on entity type {$this->entity_type}.");

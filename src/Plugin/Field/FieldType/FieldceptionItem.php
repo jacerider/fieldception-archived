@@ -6,6 +6,8 @@ use Drupal\Core\Field\FieldItemBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Component\Utility\NestedArray;
+use Drupal\field_ui\FieldUI;
+use Drupal\Component\Utility\SortArray;
 
 /**
  * Plugin implementation of the 'fieldception' field type.
@@ -109,6 +111,7 @@ class FieldceptionItem extends FieldItemBase {
       $form_state->set('fieldception_storage_default', $settings['storage_default']);
       $form_state->set('fieldception_storage', $settings['storage']);
     }
+    $form_state->set('fieldception_has_data', $has_data);
 
     $element['storage'] = [
       '#type' => 'value',
@@ -127,6 +130,8 @@ class FieldceptionItem extends FieldItemBase {
     $count = 1;
     $user_input = $form_state->getUserInput();
     foreach ($storage as $subfield => $config) {
+      $is_new = !isset($settings['storage'][$subfield]);
+      $disable = $has_data && !$is_new;
       $config['type'] = isset($user_input['settings']['_storage'][$subfield]['type']) ? $user_input['settings']['_storage'][$subfield]['type'] : $config['type'];
 
       $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
@@ -144,7 +149,7 @@ class FieldceptionItem extends FieldItemBase {
         '#type' => 'select',
         '#title' => $this->t('Field type'),
         '#default_value' => $config['type'],
-        '#disabled' => $has_data,
+        '#disabled' => $disable,
         '#required' => TRUE,
         '#options' => $field_type_options,
         '#ajax' => [
@@ -158,14 +163,19 @@ class FieldceptionItem extends FieldItemBase {
         '#default_value' => $config['label'],
         '#required' => TRUE,
       ];
+      $element['_storage'][$subfield]['weight'] = [
+        '#type' => 'weight',
+        '#title' => $this->t('Weight'),
+        '#default_value' => '0',
+      ];
 
       $element['_storage'][$subfield]['settings'] = [];
-      $element['_storage'][$subfield]['settings'] = $subfield_storage->storageSettingsForm($element['_storage'][$subfield]['settings'], $form_state, $has_data);
+      $element['_storage'][$subfield]['settings'] = $subfield_storage->storageSettingsForm($element['_storage'][$subfield]['settings'], $form_state, $disable);
 
       // List validation has hardcoded database column names so we need to
       // override the validation. This is only an issue when list fields
       // check for changes in existing value lists.
-      if ($has_data && in_array($config['type'], ['list_string']) && isset($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'])) {
+      if ($disable && in_array($config['type'], ['list_string']) && isset($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'])) {
         $has_validation = !empty(array_filter($element['_storage'][$subfield]['settings']['allowed_values']['#element_validate'], function ($callback) {
           return isset($callback[1]) && $callback[1] === 'validateAllowedValues';
         }));
@@ -203,7 +213,96 @@ class FieldceptionItem extends FieldItemBase {
       ],
     ];
 
+    $form['#process'][] = [$this, 'storageFormAfterBuild'];
+
     return $element;
+  }
+
+  /**
+   * After form build.
+   */
+  public function storageFormAfterBuild($form, FormStateInterface $form_state) {
+    $form['#prefix'] = '';
+    array_unshift($form['actions']['submit']['#submit'], [get_class($this), 'storageBeforeSave']);
+    $form['actions']['submit']['#submit'][] = [get_class($this), 'storageAfterSave'];
+    $form['actions']['submit']['#weight'] = -1;
+    return $form;
+  }
+
+  /**
+   * Before save callback.
+   */
+  public static function storageBeforeSave($form, FormStateInterface $form_state) {
+    if ($form_state->get('fieldception_has_data', FALSE)) {
+      // If field has data, we need to get all data in the table and whipe the
+      // data so that Drupal will let us make the change. We will restore this
+      // data in ::storageAfterSave().
+      $entity = $form_state->getFormObject()->getEntity();
+      $database = \Drupal::database();
+      $tables = [
+        $entity->getTargetEntityTypeId() . '__' . $entity->getName() => [],
+      ];
+      if ($entity->isRevisionable() && $database->schema()->tableExists($entity->getTargetEntityTypeId() . '_revision__' . $entity->getName())) {
+        $tables[$entity->getTargetEntityTypeId() . '_revision__' . $entity->getName()] = [];
+      }
+      foreach ($tables as $table => $values) {
+        $tables[$table] = $database->select($table, 't')
+          ->fields('t', [])
+          ->execute()
+          ->fetchAll(\PDO::FETCH_ASSOC);
+        $database->truncate($table)->execute();
+      }
+      $form_state->set('fieldception_tables', $tables);
+    }
+  }
+
+  /**
+   * After save callback.
+   */
+  public static function storageAfterSave($form, FormStateInterface $form_state) {
+    if ($form_state->get('fieldception_has_data', FALSE)) {
+      // Restore data.
+      $entity = $form_state->getFormObject()->getEntity();
+      $database = \Drupal::database();
+      $tables = $form_state->get('fieldception_tables');
+      $columns = [
+        'bundle',
+        'deleted',
+        'entity_id',
+        'revision_id',
+        'langcode',
+        'delta',
+      ];
+      foreach ($entity->getSchema()['columns'] as $key => $value) {
+        $name = $entity->getName() . '_' . $key;
+        $columns[] = $name;
+        foreach ($tables as $table => $values) {
+          foreach ($values as $key => $row) {
+            if (!isset($tables[$table][$key][$name])) {
+              $tables[$table][$key][$name] = NULL;
+            }
+          }
+        }
+      }
+      // Put the values back in the table.
+      foreach ($tables as $table => $values) {
+        $query = $database->insert($table)->fields($columns);
+        foreach ($values as $row) {
+          $query->values($row);
+        }
+        $query->execute();
+      }
+    }
+
+    $entity = $form_state->getFormObject()->getEntity();
+    $entity_type = \Drupal::entityManager()->getDefinition($form_state->get('entity_type_id'));
+    $bundle = $form_state->get('bundle');
+    $route_name = str_replace($entity_type->id() . '.', $entity_type->id() . '.' . $bundle . '.', $entity->id());
+    $route_parameters = [
+      'field_config' => $route_name,
+    ] + FieldUI::getRouteBundleParameter($entity_type, $bundle);
+    $form_state->setRedirect("entity.field_config.{$entity_type->id()}_field_edit_form", $route_parameters);
+
   }
 
   /**
@@ -213,11 +312,14 @@ class FieldceptionItem extends FieldItemBase {
    */
   public static function validateStorage($element, FormStateInterface $form_state, $form) {
     $fields = $form_state->getValue(['settings', '_storage']);
+    uasort($fields, [SortArray::class, 'sortByWeightElement']);
     foreach ($fields as $subfield => $config) {
+      unset($fields[$subfield]['weight']);
       $fields[$subfield] += [
         'settings' => [],
       ];
     }
+    ksm($fields);
     $form_state->setValue(['settings', 'storage'], $fields);
   }
 

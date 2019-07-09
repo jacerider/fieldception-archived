@@ -2,4 +2,7 @@ services:
   fieldception.helper:
     class: Drupal\fieldception\FieldceptionHelper
     arguments: ['@plugin.manager.field.field_type', '@plugin.manager.field.widget', '@plugin.manager.field.formatter']
-
+  fieldception.config_subscriber:
+    class: Drupal\fieldception\FieldceptionConfigSubscriber
+    tags:
+      - { name: event_subscriber }

@@ -1,0 +1,5 @@
+field:
+  version: VERSION
+  css:
+    component:
+      css/fieldception.field.css: {}

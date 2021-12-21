@@ -7,11 +7,46 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
 use Drupal\link\LinkItemInterface;
+use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\fieldception\FieldceptionHelper;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Base class for Double field formatters.
  */
-abstract class FieldceptionBase extends FormatterBase {
+abstract class FieldceptionBase extends FormatterBase implements ContainerFactoryPluginInterface {
+
+  /**
+   * The Fieldception helper.
+   *
+   * @var \Drupal\fieldception\FieldceptionHelper
+   */
+  protected $fieldceptionHelper;
+
+  /**
+   * {@inheritdoc}
+   */
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, FieldceptionHelper $fieldcaption_helper) {
+    parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $label, $view_mode, $third_party_settings);
+    $this->fieldceptionHelper = $fieldcaption_helper;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    return new static(
+      $plugin_id,
+      $plugin_definition,
+      $configuration['field_definition'],
+      $configuration['settings'],
+      $configuration['label'],
+      $configuration['view_mode'],
+      $configuration['third_party_settings'],
+      $container->get('fieldception.helper')
+    );
+  }
 
   /**
    * {@inheritdoc}
@@ -25,12 +60,41 @@ abstract class FieldceptionBase extends FormatterBase {
   /**
    * {@inheritdoc}
    */
+  public static function defaultWidgetSettings() {
+    return [
+      'label_display' => 'above',
+      'link_to_field' => '',
+      'settings' => [],
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getSettings() {
+    $field_definition = $this->fieldDefinition;
+    // Merge defaults before returning the array.
+    if (!$this->defaultSettingsMerged) {
+      $this->mergeDefaults();
+    }
+    $field_settings = $this->getFieldSettings();
+    foreach ($field_settings['storage'] as $subfield => $config) {
+      $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+      $this->settings[$subfield] = isset($this->settings['fields'][$subfield]) ? $this->settings['fields'][$subfield] : [];
+      if (empty($this->settings['fields'][$subfield]['type'])) {
+        $this->settings['fields'][$subfield]['type'] = $this->fieldceptionHelper->getSubfieldDefaultFormatter($subfield_definition);
+      }
+      $this->settings['fields'][$subfield] += static::defaultWidgetSettings();
+    }
+    return $this->settings;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function settingsForm(array $form, FormStateInterface $form_state) {
-    $fieldception_helper = \Drupal::service('fieldception.helper');
     $settings = $this->getSettings();
     $field_settings = $this->getFieldSettings();
-    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
-    $field_name = $this->fieldDefinition->getName();
 
     $element = [];
 
@@ -43,67 +107,18 @@ abstract class FieldceptionBase extends FormatterBase {
         $link_field_options[$subfield] = $config['label'];
       }
     }
-
     foreach ($field_settings['storage'] as $subfield => $config) {
-      $wrapper_id = Html::getId('fieldception-' . $field_name . '-' . $subfield);
-
-      $subfield_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
-      $subfield_definition = $fieldception_helper->getSubfieldDefinition($field_definition, $config, $subfield);
-      // Get type. First use submitted value, Then current settings. Then
-      // default formatter if nothing has been set yet.
-      $subfield_formatter_type = $form_state->getValue([
-        'fields',
-        $field_name,
-        'settings_edit_form',
-        'settings',
-        'fields',
-        $subfield,
-        'type',
-      ]) ?: $this->getSubfieldFormatterType($subfield_definition);
-
-      $is_hidden = $subfield_formatter_type === '_hidden';
-
-      $element['fields'][$subfield] = [
-        '#type' => 'fieldset',
-        '#title' => $config['label'],
-        '#tree' => TRUE,
-        '#id' => $wrapper_id,
-      ];
-      $element['fields'][$subfield]['type'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Formatter'),
-        '#options' => ['_hidden' => '- Hidden -'] + $fieldception_helper->getFieldFormatterPluginManager()->getOptions($config['type']),
-        '#default_value' => $subfield_formatter_type,
-        '#required' => TRUE,
-        '#ajax' => [
-          'callback' => [get_class($this), 'settingsFormAjax'],
-          'wrapper' => $wrapper_id,
-        ],
-      ];
-      $element['fields'][$subfield]['label_display'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Label display'),
-        '#options' => $this->getFieldLabelOptions(),
-        '#default_value' => !empty($settings['fields'][$subfield]['label_display']) ? $settings['fields'][$subfield]['label_display'] : 'above',
-        '#access' => !$is_hidden,
-      ];
-
-      $element['fields'][$subfield]['settings'] = [
-        '#access' => !$is_hidden,
-      ];
-      if (!$is_hidden) {
-        $subfield_formatter = $fieldception_helper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_settings, $this->viewMode, $this->label);
-        $element['fields'][$subfield]['settings'] = $subfield_formatter->settingsForm($element['fields'][$subfield]['settings'], $form_state);
-
-        if (!empty($link_field_options) && $config['type'] !== 'link' && isset($element['fields'][$subfield]['settings']['link_to_entity'])) {
-          $element['fields'][$subfield]['settings']['link_to_field'] = [
-            '#type' => 'select',
-            '#title' => $this->t('Link using a field'),
-            '#options' => ['' => $this->t('- None -')] + $link_field_options,
-            '#default_value' => !empty($subfield_settings['link_to_field']) ? $subfield_settings['link_to_field'] : '',
-          ];
-
-        }
+      $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
+      $subfield_formatter_settings = isset($subfield_settings['settings']) ? $subfield_settings['settings'] : [];
+      $element['fields'][$subfield] = $this->settingsFormField($subfield, $config, $subfield_settings, $form_state);
+      if ($element['fields'][$subfield]['settings']['#access'] && !empty($link_field_options) && $config['type'] !== 'link') {
+        $element['fields'][$subfield]['link_to_field'] = [
+          '#type' => 'select',
+          '#title' => $this->t('Link using a field'),
+          '#options' => ['' => $this->t('- None -')] + $link_field_options,
+          '#default_value' => !empty($subfield_settings['link_to_field']) ? $subfield_settings['link_to_field'] : '',
+          '#weight' => -10,
+        ];
       }
     }
 
@@ -111,12 +126,124 @@ abstract class FieldceptionBase extends FormatterBase {
   }
 
   /**
+   * Get possible link fields.
+   */
+  protected function getLinkFieldOptions() {
+    $field_settings = $this->getFieldSettings();
+    $link_field_options = [];
+    foreach ($field_settings['storage'] as $subfield => $config) {
+      if ($config['type'] === 'link') {
+        $link_field_options[$subfield] = $config['label'];
+      }
+    }
+    return $link_field_options;
+  }
+
+  /**
+   * Individual field settings.
+   */
+  protected function settingsFormField($subfield, $config, $settings, FormStateInterface $form_state) {
+    $field_definition = $this->fieldDefinition;
+    $field_name = $this->fieldDefinition->getName();
+    $wrapper_id = Html::getId('fieldception-' . $field_name . '-' . $subfield);
+    $subfield_formatter_settings = isset($settings['settings']) ? $settings['settings'] : [];
+    $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+    // Get type. First use submitted value, Then current settings. Then
+    // default formatter if nothing has been set yet.
+    $subfield_formatter_type = $form_state->getValue([
+      'fields',
+      $field_name,
+      'settings_edit_form',
+      'settings',
+      'fields',
+      $subfield,
+      'type',
+    ]) ?: $settings['type'];
+
+    $is_hidden = $subfield_formatter_type === '_hidden';
+    $element = [
+      '#type' => 'fieldset',
+      '#title' => $config['label'],
+      '#tree' => TRUE,
+      '#id' => $wrapper_id,
+    ];
+    $element['type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Formatter'),
+      '#options' => ['_hidden' => '- Hidden -'] + $this->fieldceptionHelper->getFieldFormatterPluginManager()->getOptions($config['type']),
+      '#default_value' => $subfield_formatter_type,
+      '#required' => TRUE,
+      '#weight' => -10,
+      '#ajax' => [
+        'callback' => [get_class($this), 'settingsFormAjax'],
+        'wrapper' => $wrapper_id,
+      ],
+    ];
+    $element['label_display'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Label display'),
+      '#options' => $this->getFieldLabelOptions(),
+      '#default_value' => !empty($settings['label_display']) ? $settings['label_display'] : 'above',
+      '#access' => !$is_hidden,
+      '#weight' => -10,
+    ];
+
+    $element['settings'] = [
+      '#access' => !$is_hidden,
+    ];
+    if (!$is_hidden) {
+      $subfield_formatter = $this->fieldceptionHelper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_formatter_settings, $this->viewMode, $this->label);
+      $element['settings'] += $subfield_formatter->settingsForm($element['settings'], $form_state);
+    }
+
+    return $element;
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function settingsSummary() {
-    return [
-      'Inception of the field',
-    ];
+    $settings = $this->getSettings();
+    $field_settings = $this->getFieldSettings();
+    $field_definition = $this->fieldDefinition->getFieldStorageDefinition();
+    $summary = [];
+
+    foreach ($field_settings['storage'] as $subfield => $config) {
+      if (key($field_settings['storage']) != $subfield) {
+        $summary[] = '--------';
+      }
+      $subfield_settings = isset($settings['fields'][$subfield]) ? $settings['fields'][$subfield] : [];
+      $summary = array_merge($summary, $this->settingsFieldSummary($subfield, $config, $subfield_settings));
+    }
+
+    return $summary;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function settingsFieldSummary($subfield, $config, $settings) {
+    $summary = [];
+    $field_definition = $this->fieldDefinition;
+    $subfield_formatter_settings = isset($settings['settings']) ? $settings['settings'] : [];
+    $subfield_definition = $this->fieldceptionHelper->getSubfieldDefinition($field_definition, $config, $subfield);
+    $subfield_formatter_type = $settings['type'];
+    $subfield_formatter_options = $this->fieldceptionHelper->getFieldFormatterPluginManager()->getOptions($config['type']);
+    $is_hidden = $subfield_formatter_type === '_hidden';
+    $summary[] = $this->t('Subfield: %value', ['%value' => $config['label']]);
+    if (!$is_hidden && isset($subfield_formatter_options[$subfield_formatter_type])) {
+      $subfield_formatter = $this->fieldceptionHelper->getSubfieldFormatter($subfield_definition, $subfield_formatter_type, $subfield_formatter_settings, $this->viewMode, $this->label);
+      $summary[] = $this->t('Label display: %value', ['%value' => $this->getFieldLabelOptions()[$settings['label_display']]]);
+      $summary[] = $this->t('Format: %value', ['%value' => $subfield_formatter_options[$subfield_formatter_type]]);
+      if (!empty($settings['link_to_field']) && isset($this->getLinkFieldOptions()[$settings['link_to_field']])) {
+        $summary[] = $this->t('Link using field: %value', ['%value' => $this->getLinkFieldOptions()[$settings['link_to_field']]]);
+      }
+      $summary = array_merge($summary, $subfield_formatter->settingsSummary());
+    }
+    else {
+      $summary[] = $this->t('Format: %value', ['%value' => $this->t('- Hidden -')]);
+    }
+    return $summary;
   }
 
   /**
@@ -157,18 +284,6 @@ abstract class FieldceptionBase extends FormatterBase {
       'hidden' => '- ' . $this->t('Hidden') . ' -',
       'visually_hidden' => '- ' . $this->t('Visually Hidden') . ' -',
     ];
-  }
-
-  /**
-   * Get subfield widget type.
-   */
-  protected function getSubfieldFormatterType($subfield_definition) {
-    $subfield = $subfield_definition->getSubfield();
-    $settings = $this->getSettings();
-    if (!empty($settings['fields'][$subfield]['type'])) {
-      return $settings['fields'][$subfield]['type'];
-    }
-    return \Drupal::service('fieldception.helper')->getSubfieldDefaultFormatter($subfield_definition);
   }
 
   /**

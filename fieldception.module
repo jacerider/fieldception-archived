@@ -1,4 +1,5 @@
 <?php
+use Drupal\Core\Form\FormStateInterface;
 
 /**
  * @file
@@ -42,4 +43,18 @@ function fieldception_preprocess_field_multiple_value_form(&$variables) {
 function fieldception_validation_constraint_alter(array &$definitions) {
   // This constraint is required to test empty boolean values.
   $definitions['NotEqualTo']['class'] = '\Symfony\Component\Validator\Constraints\NotEqualTo';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function fieldception_form_field_config_edit_form_alter(&$form, FormStateInterface &$form_state) {
+  /** @var \Drupal\field\Entity\FieldConfig $field */
+  $field = $form_state->getFormObject()->getEntity();
+
+  // Check field type and add config form but only if field type is telephone.
+  if ($field->getType() == 'fieldception') {
+    $form['#id'] = 'fieldception-wrapper';
+    $form['#process'][] = ['\Drupal\fieldception\Plugin\Field\FieldType\FieldceptionItem', 'fieldFormAfterBuild'];
+  }
 }

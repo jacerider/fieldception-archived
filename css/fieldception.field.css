@@ -1,0 +1,11 @@
+.fieldception-field table tr td:last-child {
+  width: 1%;
+}
+
+td.fieldception-size-min {
+  width: 1%;
+}
+
+td.fieldception-position-center {
+  text-align: center;
+}

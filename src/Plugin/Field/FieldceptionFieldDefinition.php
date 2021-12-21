@@ -2,22 +2,26 @@
 
 namespace Drupal\fieldception\Plugin\Field;
 
-use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\TypedData\OptionsProviderInterface;
-use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\Config\Entity\ThirdPartySettingsInterface;
+use Drupal\Core\Field\FieldDefinitionInterface;
+use Drupal\Core\Field\FieldConfigBase;
+use Drupal\Core\Field\FieldException;
 
 /**
  * A class for defining entity fields.
  */
-class FieldceptionFieldDefinition extends BaseFieldDefinition {
+class FieldceptionFieldDefinition extends FieldConfigBase implements ThirdPartySettingsInterface {
 
   /**
-   * The subfield key.
+   * Third party entity settings.
    *
-   * @var string
+   * An array of key/value pairs keyed by provider.
+   *
+   * @var array
    */
-  protected $key;
+  protected $thirdPartySettings = [];
 
   /**
    * Sets the definition key.
@@ -31,7 +35,8 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    *   The object itself for chaining.
    */
   public function setKey($key) {
-    $this->key = $key;
+    $this->id = $key;
+    $this->uuid = $key;
     return $this;
   }
 
@@ -42,7 +47,30 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    *   The subfield key.
    */
   public function getKey() {
-    return $this->key;
+    return $this->uuid;
+  }
+
+  /**
+   * Gets the subfield name.
+   *
+   * @return string
+   *   The subfield name.
+   */
+  public function getName() {
+    return $this->name;
+  }
+
+  /**
+   * Sets the subfield name.
+   *
+   * @param string $name
+   *   The subfield name.
+   *
+   * @return $this
+   */
+  public function setName($name) {
+    $this->name = $name;
+    return $this;
   }
 
   /**
@@ -53,7 +81,7 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    */
   public function getSubfield() {
     $parts = explode(':', $this->getName());
-    return $parts[1];
+    return isset($parts[1]) ? $parts[1] : $parts[0];
   }
 
   /**
@@ -88,15 +116,84 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
   }
 
   /**
-   * Creates a new field definition based upon a field storage definition.
+   * {@inheritdoc}
+   */
+  public function setThirdPartySetting($module, $key, $value) {
+    $this->thirdPartySettings[$module][$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySetting($module, $key, $default = NULL) {
+    if (isset($this->thirdPartySettings[$module][$key])) {
+      return $this->thirdPartySettings[$module][$key];
+    }
+    else {
+      return $default;
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySettings($module) {
+    return isset($this->thirdPartySettings[$module]) ? $this->thirdPartySettings[$module] : [];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function unsetThirdPartySetting($module, $key) {
+    unset($this->thirdPartySettings[$module][$key]);
+    // If the third party is no longer storing any information, completely
+    // remove the array holding the settings for this module.
+    if (empty($this->thirdPartySettings[$module])) {
+      unset($this->thirdPartySettings[$module]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartyProviders() {
+    return array_keys($this->thirdPartySettings);
+  }
+
+  /**
+   * Creates a new field definition.
    *
-   * In cases where one needs a field storage definitions to act like full
+   * @param array $values
+   *   The values of the field definition.
+   *
+   * @return static
+   *   A new field definition object.
+   */
+  public static function create(array $values = []) {
+    if (isset($values['field_storage'])) {
+      $field_storage = $values['field_storage'];
+      $values['field_name'] = $field_storage->getName();
+      $values['field_type'] = $field_storage->getType();
+      $values['entity_type'] = $field_storage->getTargetEntityTypeId();
+      // The internal property is fieldStorage, not field_storage.
+      unset($values['field_storage']);
+      $values['fieldStorage'] = $field_storage;
+    }
+    return new static($values, 'field_config');
+  }
+
+  /**
+   * Creates a new field definition based upon a field definition.
+   *
+   * In cases where one needs a field definitions to act like full
    * field definitions, this creates a new field definition based upon the
    * (limited) information available. That way it is possible to use the field
    * definition in places where a full field definition is required; e.g., with
    * widgets or formatters.
    *
-   * @param \Drupal\Core\Field\FieldStorageDefinitionInterface $definition
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
    *   The field storage definition to base the new field definition upon.
    * @param array $config
    *   An array of configuration options with the following keys:
@@ -108,39 +205,73 @@ class FieldceptionFieldDefinition extends BaseFieldDefinition {
    *
    * @return $this
    */
-  public static function createFromParentFieldStorageDefinition(FieldStorageDefinitionInterface $definition, array $config, $subfield) {
-    // FieldceptionHelper->getSubfieldItemList() will convert this back to
-    // the actual field name.
+  public static function createFromParentFieldDefinition(FieldDefinitionInterface $definition, array $config, $subfield) {
     $name = $definition->getName() . ':' . $subfield;
-    return static::create($config['type'])
-      // Subfields only support single values.
-      ->setCardinality(1)
-      ->setConstraints($definition->getConstraints())
-      ->setCustomStorage($definition->hasCustomStorage())
-      ->setDescription($definition->getDescription())
-      ->setLabel($config['label'])
-      ->setName($name)
-      ->setProvider($definition->getProvider())
-      ->setQueryable($definition->isQueryable())
-      ->setRevisionable($definition->isRevisionable())
-      ->setSettings($config['settings'])
-      ->setTargetEntityTypeId($definition->getTargetEntityTypeId())
-      ->setTranslatable($definition->isTranslatable());
+    $settings = $definition->getSettings();
+    $field_settings = isset($settings['fields'][$subfield]['settings']) ? $settings['fields'][$subfield]['settings'] : [];
+    $storage_definition = $definition->getFieldStorageDefinition();
+    return static::create([
+      'field_storage' => \Drupal::service('fieldception.helper')->getSubfieldStorageDefinition($storage_definition, $config, $subfield),
+      'bundle' => $definition->getTargetBundle(),
+      'settings' => $field_settings,
+      'name' => $name,
+      'type' => $config['type'],
+      'label' => $config['label'],
+    ]);
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getOptionsProvider($property_name, FieldableEntityInterface $entity) {
-    if (is_subclass_of($this->getFieldItemClass(), OptionsProviderInterface::class)) {
-      $field_type_plugin_manager = \Drupal::service('plugin.manager.field.field_type');
+  public function isDisplayConfigurable($context) {
+    return TRUE;
+  }
 
-      $item_list_class = $field_type_plugin_manager->getDefinition($this->getFieldStorageDefinition()->getType())['list_class'];
+  /**
+   * {@inheritdoc}
+   */
+  public function getDisplayOptions($display_context) {
+    // Hide configurable fields by default.
+    return ['region' => 'hidden'];
+  }
 
-      $items_list = $item_list_class::createInstance($this->getFieldStorageDefinition(), $this->getName(), $entity->getTypedData());
-      $item = $field_type_plugin_manager->createFieldItem($items_list, 0);
-      return $item;
+  /**
+   * {@inheritdoc}
+   */
+  public function getUniqueIdentifier() {
+    return $this->getKey();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function isReadOnly() {
+    return FALSE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function isComputed() {
+    return FALSE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getFieldStorageDefinition() {
+    if (!$this->fieldStorage) {
+      $field_storage_definitions = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions($this->entity_type);
+      $field_name = $this->getParentfield();
+      if (isset($field_storage_definitions[$field_name])) {
+        $field_storage_definition = \Drupal::service('fieldception.helper')->getSubfieldStorageDefinition($field_storage_definitions[$field_name], $field_storage_definitions[$field_name]->getSettings()['storage'][$this->getSubfield()], $this->getSubfield());
+      }
+      if (!$field_storage_definition) {
+        throw new FieldException("Attempt to create a field {$this->field_name} that does not exist on entity type {$this->entity_type}.");
+      }
+      $this->fieldStorage = $field_storage_definition;
     }
+    return $this->fieldStorage;
   }
 
 }
